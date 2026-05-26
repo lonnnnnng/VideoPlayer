@@ -23,6 +23,7 @@ class PlayerManager @Inject constructor(
 ) {
     private var exoPlayer: ExoPlayer? = null
     private var currentListener: Player.Listener? = null
+    private var currentAnalyticsListener: AnalyticsListener? = null
     private val transferByteListeners = CopyOnWriteArraySet<(Int) -> Unit>()
 
     private val transferListener = object : TransferListener {
@@ -86,11 +87,38 @@ class PlayerManager @Inject constructor(
     fun play(url: String) {
         android.util.Log.d("PlayerManager", "play - URL: $url")
         val player = getPlayer()
+        player.stop()
+        player.clearMediaItems()
         val mediaItem = MediaItem.fromUri(url)
         player.setMediaItem(mediaItem)
         player.prepare()
         player.play()
         android.util.Log.d("PlayerManager", "play - Player prepared and started")
+    }
+
+    fun stopAndClear() {
+        android.util.Log.d("PlayerManager", "stopAndClear")
+        exoPlayer?.run {
+            playWhenReady = false
+            stop()
+            clearMediaItems()
+            clearVideoSurface()
+        }
+    }
+
+    fun stopAndRelease() {
+        android.util.Log.d("PlayerManager", "stopAndRelease")
+        exoPlayer?.run {
+            playWhenReady = false
+            stop()
+            clearMediaItems()
+            clearVideoSurface()
+            release()
+        }
+        exoPlayer = null
+        currentListener = null
+        currentAnalyticsListener = null
+        transferByteListeners.clear()
     }
 
     fun pause() {
@@ -122,6 +150,7 @@ class PlayerManager @Inject constructor(
     }
 
     fun addListener(listener: Player.Listener) {
+        currentListener?.takeIf { it != listener }?.let { exoPlayer?.removeListener(it) }
         currentListener = listener
         getPlayer().addListener(listener)
     }
@@ -134,14 +163,20 @@ class PlayerManager @Inject constructor(
     }
 
     fun addAnalyticsListener(listener: AnalyticsListener) {
+        currentAnalyticsListener?.takeIf { it != listener }?.let { exoPlayer?.removeAnalyticsListener(it) }
+        currentAnalyticsListener = listener
         getPlayer().addAnalyticsListener(listener)
     }
 
     fun removeAnalyticsListener(listener: AnalyticsListener) {
         exoPlayer?.removeAnalyticsListener(listener)
+        if (currentAnalyticsListener == listener) {
+            currentAnalyticsListener = null
+        }
     }
 
     fun addTransferByteListener(listener: (Int) -> Unit) {
+        transferByteListeners.clear()
         transferByteListeners += listener
     }
 
@@ -151,9 +186,11 @@ class PlayerManager @Inject constructor(
 
     fun release() {
         currentListener?.let { exoPlayer?.removeListener(it) }
+        currentAnalyticsListener?.let { exoPlayer?.removeAnalyticsListener(it) }
         exoPlayer?.release()
         exoPlayer = null
         currentListener = null
+        currentAnalyticsListener = null
         transferByteListeners.clear()
     }
 }

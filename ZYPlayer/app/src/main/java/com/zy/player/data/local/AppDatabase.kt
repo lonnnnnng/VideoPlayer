@@ -17,7 +17,7 @@ import com.zy.player.data.local.entity.VideoSiteEntity
         HistoryEntity::class,
         LiveSourceEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -91,6 +91,17 @@ abstract class AppDatabase : RoomDatabase() {
                         SELECT 1 FROM live_sources
                         WHERE url = '${DefaultSources.PLAYBACK_TEST_LIVE_SOURCE_URL}'
                     )
+                """)
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    UPDATE live_sources
+                    SET url = '${DefaultSources.DEFAULT_LIVE_SOURCE_URL}', lastCheckStatus = '未检测'
+                    WHERE name = 'IPTV直播源'
+                      AND url = '${DefaultSources.LEGACY_DEFAULT_LIVE_SOURCE_URL}'
                 """)
             }
         }

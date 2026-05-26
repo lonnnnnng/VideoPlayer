@@ -258,6 +258,14 @@ class PlayerViewModel @Inject constructor(
         _playbackSpeed.value = speed
     }
 
+    fun stopPlayback() {
+        Log.d(TAG, "stopPlayback")
+        _isPlaying.value = false
+        stopProgressUpdates()
+        stopNetworkSpeedUpdates()
+        playerManager.stopAndRelease()
+    }
+
     fun retryPlayback() {
         viewModelScope.launch {
             if (playbackCandidates.isEmpty()) {
@@ -685,6 +693,7 @@ class PlayerViewModel @Inject constructor(
         Log.d(TAG, "onCleared - Cleaning up")
         stopProgressUpdates()
         stopNetworkSpeedUpdates()
+        playerManager.stopAndRelease()
         playerManager.removeAnalyticsListener(analyticsListener)
         playerManager.removeTransferByteListener(transferByteListener)
         playerManager.removeListener(playerListener)
@@ -880,6 +889,14 @@ class LivePlayerViewModel @Inject constructor(
         playLive()
     }
 
+    fun stopPlayback() {
+        Log.d(TAG, "stopPlayback")
+        _isPlaying.value = false
+        stopProgressUpdates()
+        stopNetworkSpeedUpdates()
+        playerManager.stopAndRelease()
+    }
+
     private fun playLive() {
         if (liveUrl.isBlank()) return
         _activeLiveUrl.value = liveUrl
@@ -1014,6 +1031,7 @@ class LivePlayerViewModel @Inject constructor(
         Log.d(TAG, "onCleared - Cleaning up")
         stopProgressUpdates()
         stopNetworkSpeedUpdates()
+        playerManager.stopAndRelease()
         playerManager.removeAnalyticsListener(analyticsListener)
         playerManager.removeTransferByteListener(transferByteListener)
         playerManager.removeListener(playerListener)

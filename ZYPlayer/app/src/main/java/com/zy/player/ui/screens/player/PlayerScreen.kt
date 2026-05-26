@@ -130,6 +130,7 @@ fun EpisodePlayerScreen(
     DisposableEffect(Unit) {
         onDispose {
             viewModel.savePlaybackPosition(title, "", episodeLabel)
+            viewModel.stopPlayback()
             if (isFullscreen) {
                 exitFullscreen(activity)
             }
@@ -157,7 +158,11 @@ fun EpisodePlayerScreen(
                 PlayerView(ctx).apply {
                     useController = false
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
                 }
+            },
+            onRelease = { playerView ->
+                playerView.player = null
             },
             update = { playerView ->
                 playerView.player = viewModel.getPlayer()
@@ -601,6 +606,7 @@ fun LivePlayerScreen(
 
     DisposableEffect(Unit) {
         onDispose {
+            viewModel.stopPlayback()
             if (isFullscreen) {
                 exitFullscreen(activity)
             }
@@ -628,7 +634,11 @@ fun LivePlayerScreen(
                 PlayerView(ctx).apply {
                     useController = false
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
                 }
+            },
+            onRelease = { playerView ->
+                playerView.player = null
             },
             update = { playerView ->
                 playerView.player = viewModel.getPlayer()

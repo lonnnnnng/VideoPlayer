@@ -2,24 +2,43 @@ package com.zy.player.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.zy.player.BuildConfig
+import com.zy.player.data.repository.AppUpdateCheckResult
+import com.zy.player.data.repository.AppUpdateInfo
+import com.zy.player.data.repository.AppUpdateRepository
 import com.zy.player.data.repository.HistoryRepository
 import com.zy.player.data.repository.LiveRepository
 import com.zy.player.data.repository.SiteRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class SettingsUpdateUiState(
+    val currentVersion: String = BuildConfig.VERSION_NAME,
+    val isChecking: Boolean = false,
+    val updateInfo: AppUpdateInfo? = null,
+    val isDownloading: Boolean = false,
+    val downloadProgress: Int = 0,
+    val installFile: File? = null
+)
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val historyRepository: HistoryRepository,
     private val siteRepository: SiteRepository,
-    private val liveRepository: LiveRepository
+    private val liveRepository: LiveRepository,
+    private val appUpdateRepository: AppUpdateRepository
 ) : ViewModel() {
     private val _maintenanceMessage = MutableStateFlow<String?>(null)
     val maintenanceMessage: StateFlow<String?> = _maintenanceMessage.asStateFlow()
+
+    private val _updateUiState = MutableStateFlow(SettingsUpdateUiState())
+    val updateUiState: StateFlow<SettingsUpdateUiState> = _updateUiState.asStateFlow()
 
     fun resetApp() {
         viewModelScope.launch {
@@ -33,6 +52,124 @@ class SettingsViewModel @Inject constructor(
                 _maintenanceMessage.value = "重置失败：${error.message ?: "未知错误"}"
             }
         }
+    }
+
+    fun checkForUpdates() {
+        val state = _updateUiState.value
+        if (state.isChecking || state.isDownloading) return
+
+        viewModelScope.launch {
+            _updateUiState.update {
+                it.copy(
+                    isChecking = true,
+                    installFile = null
+                )
+            }
+
+            appUpdateRepository.checkForUpdate(BuildConfig.VERSION_NAME)
+                .onSuccess { result ->
+                    when (result) {
+                        is AppUpdateCheckResult.NoUpdate -> {
+                            _updateUiState.update {
+                                it.copy(
+                                    isChecking = false,
+                                    updateInfo = null,
+                                    downloadProgress = 0,
+                                    installFile = null
+                                )
+                            }
+                            _maintenanceMessage.value = "已是最新版本：${result.currentVersion}"
+                        }
+                        is AppUpdateCheckResult.UpdateAvailable -> {
+                            _updateUiState.update {
+                                it.copy(
+                                    isChecking = false,
+                                    updateInfo = result.info,
+                                    downloadProgress = 0,
+                                    installFile = null
+                                )
+                            }
+                        }
+                    }
+                }
+                .onFailure { error ->
+                    _updateUiState.update { it.copy(isChecking = false) }
+                    _maintenanceMessage.value = "检测更新失败：${error.message ?: "未知错误"}"
+                }
+        }
+    }
+
+    fun downloadUpdate() {
+        val state = _updateUiState.value
+        val info = state.updateInfo ?: return
+        if (state.isChecking || state.isDownloading) return
+
+        viewModelScope.launch {
+            _updateUiState.update {
+                it.copy(
+                    isDownloading = true,
+                    downloadProgress = 0,
+                    installFile = null
+                )
+            }
+
+            appUpdateRepository.downloadApk(info) { progress ->
+                _updateUiState.update {
+                    it.copy(downloadProgress = progress.coerceIn(0, 100))
+                }
+            }
+                .onSuccess { file ->
+                    _updateUiState.update {
+                        it.copy(
+                            isDownloading = false,
+                            downloadProgress = 100,
+                            installFile = file
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _updateUiState.update {
+                        it.copy(
+                            isDownloading = false,
+                            downloadProgress = 0,
+                            installFile = null
+                        )
+                    }
+                    _maintenanceMessage.value = "下载更新失败：${error.message ?: "未知错误"}"
+                }
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        if (_updateUiState.value.isDownloading) return
+        _updateUiState.update {
+            it.copy(
+                updateInfo = null,
+                downloadProgress = 0,
+                installFile = null
+            )
+        }
+    }
+
+    fun consumeInstallFile() {
+        _updateUiState.update {
+            it.copy(
+                updateInfo = null,
+                downloadProgress = 0,
+                installFile = null
+            )
+        }
+    }
+
+    fun reportInstallLaunchFailed(error: Throwable) {
+        _updateUiState.update {
+            it.copy(
+                updateInfo = null,
+                downloadProgress = 0,
+                installFile = null
+            )
+        }
+        _maintenanceMessage.value = "打开安装器失败：${error.message ?: "未知错误"}"
     }
 
     fun consumeMaintenanceMessage() {

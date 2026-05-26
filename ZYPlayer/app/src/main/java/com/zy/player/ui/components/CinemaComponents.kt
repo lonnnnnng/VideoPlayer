@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -25,15 +26,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zy.player.ui.theme.AppColors
@@ -159,8 +165,81 @@ fun CinemaSectionHeader(
 fun CinemaSearchPill(
     text: String,
     modifier: Modifier = Modifier,
-    horizontalPadding: androidx.compose.ui.unit.Dp = 18.dp,
+    horizontalPadding: Dp = 18.dp,
     onClick: (() -> Unit)? = null
+) {
+    CinemaSearchSurface(
+        modifier = modifier,
+        horizontalPadding = horizontalPadding,
+        onClick = onClick
+    ) {
+        Text(
+            text = text,
+            color = AppColors.TextSecondary,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+fun CinemaSearchInput(
+    value: String,
+    placeholder: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    horizontalPadding: Dp = 18.dp
+) {
+    val focusRequester = remember { FocusRequester() }
+
+    CinemaSearchSurface(
+        modifier = modifier,
+        horizontalPadding = horizontalPadding,
+        onClick = { focusRequester.requestFocus() }
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester),
+            singleLine = true,
+            textStyle = TextStyle(
+                color = AppColors.TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            ),
+            cursorBrush = Brush.verticalGradient(
+                colors = listOf(AppColors.Primary, AppColors.Primary)
+            ),
+            decorationBox = { innerTextField ->
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            color = AppColors.TextSecondary,
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    innerTextField()
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun CinemaSearchSurface(
+    modifier: Modifier = Modifier,
+    horizontalPadding: Dp = 18.dp,
+    onClick: (() -> Unit)? = null,
+    content: @Composable () -> Unit
 ) {
     Row(
         modifier = modifier
@@ -180,13 +259,7 @@ fun CinemaSearchPill(
             modifier = Modifier.size(20.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = text,
-            color = AppColors.TextSecondary,
-            fontSize = 14.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        content()
     }
 }
 

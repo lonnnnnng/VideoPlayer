@@ -22,11 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,6 +47,7 @@ import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.components.CinemaLoading
 import com.zy.player.ui.components.CinemaMessage
 import com.zy.player.ui.components.CinemaSectionHeader
+import com.zy.player.ui.components.CinemaSearchInput
 import com.zy.player.ui.theme.AppColors
 
 @Composable
@@ -70,14 +68,12 @@ fun LiveScreen(
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 12.dp, bottom = 18.dp)
+            contentPadding = PaddingValues(bottom = 18.dp)
         ) {
             item {
-                LiveSearchSourceRow(
+                LiveSearchRow(
                     searchQuery = searchQuery,
-                    currentSourceName = currentSourceName,
-                    onSearchChange = viewModel::setSearchQuery,
-                    onSourceClick = { showSourceSelector = true }
+                    onSearchChange = viewModel::setSearchQuery
                 )
             }
 
@@ -85,6 +81,8 @@ fun LiveScreen(
                 SourceTabs(
                     labels = groups.ifEmpty { listOf("央视", "卫视", "体育", "电影", "少儿") },
                     selected = selectedGroup,
+                    currentSourceName = currentSourceName,
+                    onSourceClick = { showSourceSelector = true },
                     onClick = { group -> viewModel.selectGroup(if (group == selectedGroup) null else group) }
                 )
             }
@@ -158,74 +156,46 @@ fun LiveScreen(
 }
 
 @Composable
-private fun LiveSearchSourceRow(
+private fun LiveSearchRow(
     searchQuery: String,
-    currentSourceName: String,
-    onSearchChange: (String) -> Unit,
-    onSourceClick: () -> Unit
+    onSearchChange: (String) -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text("搜索频道") },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    tint = AppColors.Primary
-                )
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = AppColors.TextPrimary,
-                unfocusedTextColor = AppColors.TextPrimary,
-                focusedContainerColor = Color.White.copy(alpha = 0.045f),
-                unfocusedContainerColor = Color.White.copy(alpha = 0.045f),
-                focusedBorderColor = AppColors.Primary,
-                unfocusedBorderColor = AppColors.Divider,
-                cursorColor = AppColors.Primary,
-                focusedPlaceholderColor = AppColors.TextSecondary,
-                unfocusedPlaceholderColor = AppColors.TextSecondary
-            )
-        )
-        LiveSourceButton(
-            sourceName = currentSourceName,
-            onClick = onSourceClick
-        )
-    }
+    CinemaSearchInput(
+        value = searchQuery,
+        placeholder = "搜索频道",
+        onValueChange = onSearchChange,
+        modifier = Modifier.padding(top = 0.dp, bottom = 18.dp)
+    )
 }
 
 @Composable
-private fun LiveSourceButton(
+private fun LiveSourceChip(
     sourceName: String,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.size(58.dp),
-        color = Color.White.copy(alpha = 0.045f),
-        contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, AppColors.Divider)
+        color = AppColors.PrimaryLight,
+        contentColor = AppColors.Primary,
+        shape = RoundedCornerShape(999.dp),
+        border = BorderStroke(1.dp, AppColors.Primary.copy(alpha = 0.34f))
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "切换直播源：$sourceName",
-                tint = AppColors.Cream,
-                modifier = Modifier.size(30.dp)
+                tint = AppColors.Primary,
+                modifier = Modifier.size(15.dp)
+            )
+            Text(
+                text = "换源",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
             )
         }
     }
@@ -235,6 +205,8 @@ private fun LiveSourceButton(
 private fun SourceTabs(
     labels: List<String>,
     selected: String?,
+    currentSourceName: String,
+    onSourceClick: () -> Unit,
     onClick: (String) -> Unit
 ) {
     LazyRow(
@@ -242,6 +214,12 @@ private fun SourceTabs(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.padding(bottom = 6.dp)
     ) {
+        item {
+            LiveSourceChip(
+                sourceName = currentSourceName,
+                onClick = onSourceClick
+            )
+        }
         items(labels.take(10)) { label ->
             val active = label == selected || (selected == null && label == labels.first())
             Surface(

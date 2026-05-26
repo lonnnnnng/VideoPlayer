@@ -1,5 +1,8 @@
 package com.zy.player.ui.screens.settings
 
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.MoreVert
@@ -27,10 +31,12 @@ import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,14 +47,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.components.CinemaSectionHeader
 import com.zy.player.ui.components.CinemaTopBar
 import com.zy.player.ui.theme.AppColors
+import java.io.File
 
 @Composable
 fun SettingsScreen(
@@ -61,6 +71,19 @@ fun SettingsScreen(
     var showDisclaimerDialog by remember { mutableStateOf(false) }
     var showMoreDialog by remember { mutableStateOf(false) }
     val maintenanceMessage by viewModel.maintenanceMessage.collectAsState()
+    val updateUiState by viewModel.updateUiState.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(updateUiState.installFile) {
+        val apkFile = updateUiState.installFile ?: return@LaunchedEffect
+        runCatching {
+            installApk(context, apkFile)
+        }.onSuccess {
+            viewModel.consumeInstallFile()
+        }.onFailure { error ->
+            viewModel.reportInstallLaunchFailed(error)
+        }
+    }
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -104,6 +127,16 @@ fun SettingsScreen(
             item {
                 CinemaSectionHeader(title = "应用维护", meta = "高级")
                 SettingsGroup {
+                    SettingsItem(
+                        icon = Icons.Default.Download,
+                        title = "检测更新",
+                        subtitle = if (updateUiState.isChecking) {
+                            "正在检查 GitHub Releases"
+                        } else {
+                            "当前版本 ${updateUiState.currentVersion}"
+                        },
+                        onClick = viewModel::checkForUpdates
+                    )
                     SettingsItem(
                         icon = Icons.Default.Delete,
                         title = "重置应用",
@@ -178,6 +211,77 @@ fun SettingsScreen(
         )
     }
 
+    updateUiState.updateInfo?.let { updateInfo ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissUpdateDialog,
+            containerColor = AppColors.Surface,
+            titleContentColor = AppColors.TextPrimary,
+            textContentColor = AppColors.TextSecondary,
+            title = { Text("发现新版本") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        VersionLine(label = "当前版本", value = updateInfo.currentVersion)
+                        VersionLine(label = "新版本", value = updateInfo.latestVersion)
+                        VersionLine(
+                            label = "安装包",
+                            value = formatApkSize(updateInfo.apkSize)
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "更新说明",
+                            color = AppColors.TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = updateInfo.releaseNotes,
+                            color = AppColors.TextSecondary,
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp,
+                            maxLines = 8,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    if (updateUiState.isDownloading || updateUiState.downloadProgress > 0) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            LinearProgressIndicator(
+                                progress = { updateUiState.downloadProgress / 100f },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = AppColors.Primary,
+                                trackColor = AppColors.Divider
+                            )
+                            Text(
+                                text = "下载进度 ${updateUiState.downloadProgress}%",
+                                color = AppColors.TextTertiary,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = viewModel::downloadUpdate,
+                    enabled = !updateUiState.isDownloading
+                ) {
+                    Text(if (updateUiState.downloadProgress >= 100) "打开安装" else "下载更新")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = viewModel::dismissUpdateDialog,
+                    enabled = !updateUiState.isDownloading
+                ) {
+                    Text("关闭")
+                }
+            }
+        )
+    }
+
     if (showDisclaimerDialog) {
         AlertDialog(
             onDismissRequest = { showDisclaimerDialog = false },
@@ -202,6 +306,32 @@ fun SettingsScreen(
 }
 
 @Composable
+private fun VersionLine(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = AppColors.TextTertiary,
+            fontSize = 12.sp
+        )
+        Text(
+            text = value,
+            color = AppColors.TextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
 private fun SettingsGroup(content: @Composable () -> Unit) {
     Column(
         modifier = Modifier
@@ -213,6 +343,27 @@ private fun SettingsGroup(content: @Composable () -> Unit) {
     ) {
         content()
     }
+}
+
+private fun installApk(context: Context, apkFile: File) {
+    val apkUri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        apkFile
+    )
+    val installIntent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(apkUri, "application/vnd.android.package-archive")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        clipData = ClipData.newUri(context.contentResolver, "ZYPlayer update", apkUri)
+    }
+    context.startActivity(installIntent)
+}
+
+private fun formatApkSize(size: Long): String {
+    if (size <= 0L) return "未知大小"
+    val megabytes = size / 1024f / 1024f
+    return "%.1f MB".format(megabytes)
 }
 
 @Composable

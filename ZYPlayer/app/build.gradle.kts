@@ -9,12 +9,15 @@ android {
     namespace = "com.zy.player"
     compileSdk = 35
 
+    val ciVersionName = System.getenv("VERSION_NAME")?.takeIf { it.isNotBlank() }
+    val ciVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull()
+
     defaultConfig {
         applicationId = "com.zy.player"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = ciVersionCode ?: 1
+        versionName = ciVersionName ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -43,6 +46,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
