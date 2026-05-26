@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.net.Uri
 import android.provider.Settings
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Fullscreen
@@ -62,8 +64,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -95,6 +98,7 @@ fun EpisodePlayerScreen(
     @Suppress("UNUSED_VARIABLE")
     val unusedRouteArgs = Triple(siteId, vodId, episodeUrl)
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val activity = context as? Activity
 
     val isPlaying by viewModel.isPlaying.collectAsState()
@@ -248,6 +252,17 @@ fun EpisodePlayerScreen(
                     }
 
                     PlaybackStatsRow(stats = playbackStats)
+
+                    PlayerSourceLinkRow(
+                        url = activeEpisodeUrl,
+                        onCopyClick = {
+                            copyPlayerSourceLink(
+                                context = context,
+                                clipboardManager = clipboardManager,
+                                url = activeEpisodeUrl
+                            )
+                        }
+                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -559,11 +574,13 @@ fun LivePlayerScreen(
     title: String,
     group: String,
     format: String,
+    onNavigateBack: () -> Unit,
     viewModel: LivePlayerViewModel = hiltViewModel()
 ) {
     @Suppress("UNUSED_VARIABLE")
     val unusedRouteArgs = url to group
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val activity = context as? Activity
 
     val isPlaying by viewModel.isPlaying.collectAsState()
@@ -571,6 +588,7 @@ fun LivePlayerScreen(
     val duration by viewModel.duration.collectAsState()
     val activeLiveUrl by viewModel.activeLiveUrl.collectAsState()
     val playbackUiState by viewModel.playbackUiState.collectAsState()
+    val playbackStats by viewModel.playbackStats.collectAsState()
 
     var showCastDialog by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(false) }
@@ -622,13 +640,12 @@ fun LivePlayerScreen(
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
-                PlayerHeader(
-                    eyebrow = "IPTV LIVE",
-                    title = "直播播放",
-                    onCastClick = { showCastDialog = true }
-                )
-
                 if (!isFullscreen) {
+                    PlayerEpisodeTopBar(
+                        title = title.ifBlank { "直播频道" },
+                        onNavigateBack = onNavigateBack
+                    )
+
                     PlayerSurface(
                         isFullscreen = false,
                         showControls = showControls,
@@ -668,31 +685,17 @@ fun LivePlayerScreen(
                         .padding(horizontal = 18.dp, vertical = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = livePlayerStatusTitle(
-                                title = title,
-                                isPlaying = isPlaying,
-                                playbackUiState = playbackUiState
-                            ),
-                            color = AppColors.TextPrimary,
-                            fontSize = 29.sp,
-                            lineHeight = 33.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Serif
-                        )
-                        Text(
-                            text = livePlayerSubtitle(
-                                group = group,
-                                format = format,
-                                liveUrl = activeLiveUrl,
-                                playbackUiState = playbackUiState
-                            ),
-                            color = AppColors.TextSecondary,
-                            fontSize = 13.sp,
-                            lineHeight = 20.sp
-                        )
-                    }
+                    Text(
+                        text = livePlayerSubtitle(
+                            group = group,
+                            format = format,
+                            liveUrl = activeLiveUrl,
+                            playbackUiState = playbackUiState
+                        ),
+                        color = AppColors.TextSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp
+                    )
 
                     LinearProgressIndicator(
                         progress = { if (duration > 0) currentPosition.toFloat() / duration else 0f },
@@ -710,11 +713,34 @@ fun LivePlayerScreen(
                         PlayerMetaPill(format.ifBlank { "IPTV" })
                     }
 
+                    PlaybackStatsRow(stats = playbackStats)
+
+                    PlayerSourceLinkRow(
+                        url = activeLiveUrl,
+                        onCopyClick = {
+                            copyPlayerSourceLink(
+                                context = context,
+                                clipboardManager = clipboardManager,
+                                url = activeLiveUrl
+                            )
+                        }
+                    )
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        PlayerUtilityButton(
+                            icon = Icons.Default.Cast,
+                            label = "投屏",
+                            onClick = { showCastDialog = true },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
                         Surface(
                             onClick = {
                                 if (playbackUiState.isFailed) {
@@ -725,10 +751,10 @@ fun LivePlayerScreen(
                             },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(46.dp),
+                                .height(44.dp),
                             color = AppColors.SurfaceAlt,
                             contentColor = AppColors.TextPrimary,
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(13.dp),
                             border = BorderStroke(1.dp, AppColors.Divider)
                         ) {
                             Row(
@@ -762,14 +788,15 @@ fun LivePlayerScreen(
 
                         PlayerUtilityButton(
                             icon = Icons.Default.Fullscreen,
-                            label = null,
+                            label = "全屏",
                             onClick = {
                                 showControls = true
                                 isFullscreen = true
                             },
                             modifier = Modifier
-                                .width(46.dp)
-                                .height(46.dp)
+                                .weight(1f)
+                                .height(44.dp),
+                            shape = RoundedCornerShape(13.dp)
                         )
                     }
                 }
@@ -825,47 +852,6 @@ fun LivePlayerScreen(
                     Text("知道了")
                 }
             }
-        )
-    }
-}
-
-@Composable
-private fun PlayerHeader(
-    eyebrow: String,
-    title: String,
-    onCastClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 18.dp, top = 12.dp, end = 18.dp, bottom = 18.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                text = eyebrow,
-                color = AppColors.Primary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.4.sp
-            )
-            Text(
-                text = title,
-                color = AppColors.TextPrimary,
-                fontSize = 31.sp,
-                lineHeight = 34.sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Serif
-            )
-        }
-
-        PlayerUtilityButton(
-            icon = Icons.Default.Cast,
-            label = null,
-            onClick = onCastClick,
-            modifier = Modifier.size(44.dp),
-            shape = RoundedCornerShape(16.dp)
         )
     }
 }
@@ -1337,6 +1323,66 @@ private fun PlayerStatsCell(
 }
 
 @Composable
+private fun PlayerSourceLinkRow(
+    url: String,
+    onCopyClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(58.dp),
+        color = AppColors.SurfaceAlt,
+        contentColor = AppColors.TextPrimary,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, AppColors.Divider)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 12.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    text = "当前源地址",
+                    color = AppColors.TextTertiary,
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = url.ifBlank { "暂无可用地址" },
+                    color = AppColors.TextPrimary,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            IconButton(
+                onClick = onCopyClick,
+                enabled = url.isNotBlank(),
+                modifier = Modifier.size(42.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = "复制当前源地址",
+                    tint = if (url.isNotBlank()) AppColors.Primary else AppColors.TextTertiary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun PlayerUtilityButton(
     icon: ImageVector,
     label: String?,
@@ -1547,6 +1593,16 @@ private fun quickSeekPosition(currentPosition: Long, duration: Long, delta: Long
     }
 }
 
+private fun copyPlayerSourceLink(
+    context: Context,
+    clipboardManager: androidx.compose.ui.platform.ClipboardManager,
+    url: String
+) {
+    if (url.isBlank()) return
+    clipboardManager.setText(AnnotatedString(url))
+    Toast.makeText(context, "源地址已复制", Toast.LENGTH_SHORT).show()
+}
+
 private fun episodePlayerSubtitle(
     episodeUrl: String,
     currentPosition: Long,
@@ -1560,19 +1616,6 @@ private fun episodePlayerSubtitle(
         "已播放 ${formatTime(currentPosition)} / ${formatTime(duration)}"
     } else {
         "${playerSourceLabel(episodeUrl)} 线路准备中"
-    }
-}
-
-private fun livePlayerStatusTitle(
-    title: String,
-    isPlaying: Boolean,
-    playbackUiState: PlaybackUiState
-): String {
-    val channelName = title.ifBlank { "直播频道" }
-    return when {
-        playbackUiState.isFailed -> "$channelName · 线路不可用"
-        isPlaying -> "$channelName · 直播中"
-        else -> "$channelName · 待播放"
     }
 }
 

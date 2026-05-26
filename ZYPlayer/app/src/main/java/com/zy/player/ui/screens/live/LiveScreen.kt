@@ -10,10 +10,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,8 +20,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -42,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,9 +49,7 @@ import com.zy.player.domain.model.LiveChannel
 import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.components.CinemaLoading
 import com.zy.player.ui.components.CinemaMessage
-import com.zy.player.ui.components.CinemaMiniPlayButton
 import com.zy.player.ui.components.CinemaSectionHeader
-import com.zy.player.ui.components.CinemaTopBar
 import com.zy.player.ui.theme.AppColors
 
 @Composable
@@ -70,31 +64,20 @@ fun LiveScreen(
     val selectedGroup by viewModel.selectedGroup.collectAsState()
 
     var showSourceSelector by remember { mutableStateOf(false) }
-    var showGroupFilter by remember { mutableStateOf(false) }
     val groups = remember(uiState) { viewModel.getGroups() }
     val currentSourceName = sources.firstOrNull { it.id == currentSourceId }?.name ?: "选择直播源"
-    val enabledSourceCount = sources.count { it.enabled }
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 18.dp)
+            contentPadding = PaddingValues(top = 12.dp, bottom = 18.dp)
         ) {
             item {
-                CinemaTopBar(
-                    eyebrow = "IPTV Live",
-                    title = "直播频道",
-                    actionIcon = Icons.Default.FilterList,
-                    actionDescription = "筛选分组",
-                    onActionClick = { showGroupFilter = true }
-                )
-            }
-
-            item {
-                LiveSourceSelectorPill(
-                    sourceName = currentSourceName,
-                    sourceCount = enabledSourceCount,
-                    onClick = { showSourceSelector = true }
+                LiveSearchSourceRow(
+                    searchQuery = searchQuery,
+                    currentSourceName = currentSourceName,
+                    onSearchChange = viewModel::setSearchQuery,
+                    onSourceClick = { showSourceSelector = true }
                 )
             }
 
@@ -103,37 +86,6 @@ fun LiveScreen(
                     labels = groups.ifEmpty { listOf("央视", "卫视", "体育", "电影", "少儿") },
                     selected = selectedGroup,
                     onClick = { group -> viewModel.selectGroup(if (group == selectedGroup) null else group) }
-                )
-            }
-
-            item {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = viewModel::setSearchQuery,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 10.dp),
-                    placeholder = { Text("搜索频道") },
-                    leadingIcon = {
-                        androidx.compose.material3.Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = null,
-                            tint = AppColors.Primary
-                        )
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = AppColors.TextPrimary,
-                        unfocusedTextColor = AppColors.TextPrimary,
-                        focusedContainerColor = Color.White.copy(alpha = 0.045f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.045f),
-                        focusedBorderColor = AppColors.Primary,
-                        unfocusedBorderColor = AppColors.Divider,
-                        cursorColor = AppColors.Primary,
-                        focusedPlaceholderColor = AppColors.TextSecondary,
-                        unfocusedPlaceholderColor = AppColors.TextSecondary
-                    )
                 )
             }
 
@@ -154,14 +106,6 @@ fun LiveScreen(
                     )
                 }
                 is LiveUiState.Success -> {
-                    item {
-                        state.channels.firstOrNull()?.let { channel ->
-                            LiveFeatureCard(
-                                channel = channel,
-                                onClick = { onNavigateToPlayer(channel) }
-                            )
-                        }
-                    }
                     item {
                         CinemaSectionHeader(
                             title = "频道列表",
@@ -211,91 +155,77 @@ fun LiveScreen(
             }
         )
     }
+}
 
-    if (showGroupFilter) {
-        AlertDialog(
-            onDismissRequest = { showGroupFilter = false },
-            containerColor = AppColors.Surface,
-            titleContentColor = AppColors.TextPrimary,
-            textContentColor = AppColors.TextSecondary,
-            title = { Text("选择分组") },
-            text = {
-                Column {
-                    TextButton(
-                        onClick = {
-                            viewModel.selectGroup(null)
-                            showGroupFilter = false
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("全部频道", color = if (selectedGroup == null) AppColors.Primary else AppColors.TextPrimary)
-                    }
-                    groups.forEach { group ->
-                        TextButton(
-                            onClick = {
-                                viewModel.selectGroup(group)
-                                showGroupFilter = false
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = group,
-                                color = if (group == selectedGroup) AppColors.Primary else AppColors.TextPrimary
-                            )
-                        }
-                    }
-                }
+@Composable
+private fun LiveSearchSourceRow(
+    searchQuery: String,
+    currentSourceName: String,
+    onSearchChange: (String) -> Unit,
+    onSourceClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchChange,
+            modifier = Modifier.weight(1f),
+            placeholder = { Text("搜索频道") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    tint = AppColors.Primary
+                )
             },
-            confirmButton = {
-                TextButton(onClick = { showGroupFilter = false }) {
-                    Text("取消")
-                }
-            }
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = AppColors.TextPrimary,
+                unfocusedTextColor = AppColors.TextPrimary,
+                focusedContainerColor = Color.White.copy(alpha = 0.045f),
+                unfocusedContainerColor = Color.White.copy(alpha = 0.045f),
+                focusedBorderColor = AppColors.Primary,
+                unfocusedBorderColor = AppColors.Divider,
+                cursorColor = AppColors.Primary,
+                focusedPlaceholderColor = AppColors.TextSecondary,
+                unfocusedPlaceholderColor = AppColors.TextSecondary
+            )
+        )
+        LiveSourceButton(
+            sourceName = currentSourceName,
+            onClick = onSourceClick
         )
     }
 }
 
 @Composable
-private fun LiveSourceSelectorPill(
+private fun LiveSourceButton(
     sourceName: String,
-    sourceCount: Int,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 2.dp),
+        modifier = Modifier.size(58.dp),
         color = Color.White.copy(alpha = 0.045f),
         contentColor = AppColors.TextPrimary,
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = sourceName,
-                    color = AppColors.TextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = if (sourceCount > 1) "$sourceCount 个可用直播源" else "当前直播源",
-                    color = AppColors.TextTertiary,
-                    fontSize = 11.sp
-                )
-            }
             Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "选择直播源",
-                tint = AppColors.Primary,
-                modifier = Modifier.size(22.dp)
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "切换直播源：$sourceName",
+                tint = AppColors.Cream,
+                modifier = Modifier.size(30.dp)
             )
         }
     }
@@ -330,68 +260,6 @@ private fun SourceTabs(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun LiveFeatureCard(
-    channel: LiveChannel,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .padding(horizontal = 18.dp, vertical = 8.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                brush = Brush.linearGradient(
-                    listOf(AppColors.Accent.copy(alpha = 0.13f), AppColors.Surface)
-                )
-            )
-            .border(1.dp, Color.White.copy(alpha = 0.11f), RoundedCornerShape(20.dp))
-            .padding(13.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .width(84.dp)
-                .aspectRatio(16f / 10f)
-                .clip(RoundedCornerShape(13.dp))
-                .background(
-                    Brush.linearGradient(
-                        listOf(AppColors.Primary, AppColors.Cream)
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = channel.name.take(5).uppercase(),
-                color = AppColors.Background,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Black,
-                maxLines = 1
-            )
-        }
-        Spacer(modifier = Modifier.width(13.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = channel.name,
-                color = AppColors.TextPrimary,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Black,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = "${channel.group} · ${channel.format} · 高清线路",
-                color = AppColors.TextSecondary,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(top = 4.dp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        CinemaMiniPlayButton(onClick = onClick)
     }
 }
 

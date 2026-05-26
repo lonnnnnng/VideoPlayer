@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -34,6 +35,7 @@ import com.zy.player.ui.screens.history.HistoryScreen
 import com.zy.player.ui.screens.home.HomeScreen
 import com.zy.player.ui.screens.live.LiveScreen
 import com.zy.player.ui.screens.livesource.LiveSourceManagementScreen
+import com.zy.player.ui.screens.online.OnlineScreen
 import com.zy.player.ui.screens.player.EpisodePlayerScreen
 import com.zy.player.ui.screens.player.LivePlayerScreen
 import com.zy.player.ui.screens.search.SearchScreen
@@ -45,6 +47,7 @@ import com.zy.player.ui.theme.AppColors
 sealed class BottomNavItem(val route: String, val icon: ImageVector, val label: String) {
     object Home : BottomNavItem(Destinations.HOME, Icons.Default.Home, "首页")
     object Live : BottomNavItem(Destinations.LIVE, Icons.Default.LiveTv, "直播")
+    object Online : BottomNavItem(Destinations.ONLINE, Icons.Default.Link, "在线")
     object Settings : BottomNavItem(Destinations.SETTINGS, Icons.Default.Settings, "设置")
 }
 
@@ -55,6 +58,7 @@ fun AppNavGraph(
     val bottomNavItems = listOf(
         BottomNavItem.Home,
         BottomNavItem.Live,
+        BottomNavItem.Online,
         BottomNavItem.Settings
     )
 
@@ -106,6 +110,32 @@ fun AppNavGraph(
             composable(Destinations.LIVE) {
                 LiveScreen(
                     onNavigateToPlayer = { channel ->
+                        navController.navigate(
+                            Destinations.livePlayer(
+                                url = channel.url,
+                                title = channel.name,
+                                group = channel.group,
+                                format = channel.format
+                            )
+                        )
+                    }
+                )
+            }
+
+            composable(Destinations.ONLINE) {
+                OnlineScreen(
+                    onNavigateToM3u8Player = { url ->
+                        navController.navigate(
+                            Destinations.episodePlayer(
+                                siteId = 0L,
+                                vodId = "online",
+                                episodeUrl = url,
+                                title = "在线播放",
+                                episodeLabel = "M3U8"
+                            )
+                        )
+                    },
+                    onNavigateToLivePlayer = { channel ->
                         navController.navigate(
                             Destinations.livePlayer(
                                 url = channel.url,
@@ -244,7 +274,8 @@ fun AppNavGraph(
                     url = url,
                     title = title,
                     group = group,
-                    format = format
+                    format = format,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
 

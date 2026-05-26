@@ -723,6 +723,9 @@ class LivePlayerViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "LivePlayerViewModel"
+        private const val MIN_VIDEO_BITRATE_BITS_PER_SECOND = 50_000
+        private const val NETWORK_SPEED_UPDATE_INTERVAL_MS = 1_000L
+        private const val NETWORK_SPEED_WINDOW_MS = 3_000L
     }
 
     private val liveUrl: String = savedStateHandle.get<String>("url") ?: ""
@@ -749,7 +752,22 @@ class LivePlayerViewModel @Inject constructor(
     )
     val playbackUiState: StateFlow<PlaybackUiState> = _playbackUiState.asStateFlow()
 
+    private val _playbackStats = MutableStateFlow(PlaybackStats())
+    val playbackStats: StateFlow<PlaybackStats> = _playbackStats.asStateFlow()
+
     private var progressUpdateJob: Job? = null
+    private var networkSpeedUpdateJob: Job? = null
+    private val transferSamples = ArrayDeque<TransferSample>()
+    private val transferSamplesLock = Any()
+
+    private data class TransferSample(
+        val timestampMs: Long,
+        val bytes: Long
+    )
+
+    private val transferByteListener: (Int) -> Unit = { bytes ->
+        recordTransferredBytes(bytes)
+    }
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -791,6 +809,14 @@ class LivePlayerViewModel @Inject constructor(
             }
         }
 
+        override fun onTracksChanged(tracks: Tracks) {
+            updateVideoFormat(selectCurrentVideoFormat(tracks))
+        }
+
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            updateVideoSize(videoSize.width, videoSize.height)
+        }
+
         override fun onPlayerError(error: PlaybackException) {
             val sourceName = channelTitle.ifBlank { "IPTV直播" }
             Log.e(TAG, "onPlayerError - errorCode=${error.errorCode}, message=${error.message}", error)
@@ -805,9 +831,23 @@ class LivePlayerViewModel @Inject constructor(
         }
     }
 
+    private val analyticsListener = object : AnalyticsListener {
+        override fun onDownstreamFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            mediaLoadData: MediaLoadData
+        ) {
+            if (mediaLoadData.trackType == C.TRACK_TYPE_VIDEO) {
+                updateVideoFormat(mediaLoadData.trackFormat)
+            }
+        }
+    }
+
     init {
         Log.d(TAG, "init - liveUrl=$liveUrl")
         playerManager.addListener(playerListener)
+        playerManager.addAnalyticsListener(analyticsListener)
+        playerManager.addTransferByteListener(transferByteListener)
+        startNetworkSpeedUpdates()
         if (liveUrl.isNotBlank()) {
             playLive()
         } else {
@@ -845,6 +885,8 @@ class LivePlayerViewModel @Inject constructor(
         _activeLiveUrl.value = liveUrl
         _currentPosition.value = 0L
         _duration.value = 0L
+        resetNetworkSpeedSamples()
+        _playbackStats.value = PlaybackStats()
         _playbackUiState.value = PlaybackUiState(
             sourceName = channelTitle.ifBlank { "IPTV直播" },
             message = "正在连接直播流",
@@ -867,10 +909,113 @@ class LivePlayerViewModel @Inject constructor(
         progressUpdateJob?.cancel()
     }
 
+    private fun startNetworkSpeedUpdates() {
+        networkSpeedUpdateJob?.cancel()
+        networkSpeedUpdateJob = viewModelScope.launch {
+            while (isActive) {
+                publishMeasuredNetworkSpeed()
+                delay(NETWORK_SPEED_UPDATE_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun stopNetworkSpeedUpdates() {
+        networkSpeedUpdateJob?.cancel()
+        networkSpeedUpdateJob = null
+    }
+
+    private fun recordTransferredBytes(bytes: Int) {
+        if (bytes <= 0) return
+        val now = SystemClock.elapsedRealtime()
+        synchronized(transferSamplesLock) {
+            transferSamples += TransferSample(now, bytes.toLong())
+            pruneTransferSamplesLocked(now)
+        }
+    }
+
+    private fun resetNetworkSpeedSamples() {
+        synchronized(transferSamplesLock) {
+            transferSamples.clear()
+        }
+    }
+
+    private fun publishMeasuredNetworkSpeed() {
+        val now = SystemClock.elapsedRealtime()
+        val speedBitsPerSecond = synchronized(transferSamplesLock) {
+            pruneTransferSamplesLocked(now)
+            val totalBytes = transferSamples.sumOf { it.bytes }
+            if (totalBytes <= 0L) {
+                0L
+            } else {
+                val firstSampleTime = transferSamples.first().timestampMs
+                val windowMs = (now - firstSampleTime).coerceAtLeast(NETWORK_SPEED_UPDATE_INTERVAL_MS)
+                totalBytes.coerceAtMost(Long.MAX_VALUE / 8_000L) * 8_000L / windowMs
+            }
+        }
+
+        _playbackStats.value = _playbackStats.value.copy(
+            networkSpeedBitsPerSecond = speedBitsPerSecond
+        )
+    }
+
+    private fun pruneTransferSamplesLocked(now: Long) {
+        while (transferSamples.isNotEmpty() && now - transferSamples.first().timestampMs > NETWORK_SPEED_WINDOW_MS) {
+            transferSamples.removeFirst()
+        }
+    }
+
+    private fun updateVideoSize(width: Int, height: Int) {
+        if (width <= 0 || height <= 0) return
+        _playbackStats.value = _playbackStats.value.copy(
+            resolutionWidth = width,
+            resolutionHeight = height
+        )
+    }
+
+    private fun updateVideoFormat(format: Format?) {
+        if (format == null) return
+
+        val nextWidth = format.width.takeIf { it > 0 } ?: _playbackStats.value.resolutionWidth
+        val nextHeight = format.height.takeIf { it > 0 } ?: _playbackStats.value.resolutionHeight
+        val nextBitrate = firstReasonableVideoBitrate(
+            format.bitrate,
+            format.averageBitrate,
+            format.peakBitrate
+        )?.toLong() ?: _playbackStats.value.videoBitrateBitsPerSecond
+
+        _playbackStats.value = _playbackStats.value.copy(
+            resolutionWidth = nextWidth,
+            resolutionHeight = nextHeight,
+            videoBitrateBitsPerSecond = nextBitrate
+        )
+    }
+
+    private fun selectCurrentVideoFormat(tracks: Tracks): Format? {
+        tracks.groups.forEach { group ->
+            if (group.type == C.TRACK_TYPE_VIDEO && group.isSelected) {
+                for (index in 0 until group.length) {
+                    if (group.isTrackSelected(index)) {
+                        return group.getTrackFormat(index)
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun firstReasonableVideoBitrate(vararg values: Int): Int? {
+        return values.firstOrNull {
+            it != Format.NO_VALUE && it >= MIN_VIDEO_BITRATE_BITS_PER_SECOND
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         Log.d(TAG, "onCleared - Cleaning up")
         stopProgressUpdates()
+        stopNetworkSpeedUpdates()
+        playerManager.removeAnalyticsListener(analyticsListener)
+        playerManager.removeTransferByteListener(transferByteListener)
         playerManager.removeListener(playerListener)
     }
 }

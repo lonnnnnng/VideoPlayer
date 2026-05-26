@@ -5,6 +5,7 @@ import android.net.Uri
 object Destinations {
     const val HOME = "home"
     const val LIVE = "live"
+    const val ONLINE = "online"
     const val SETTINGS = "settings"
     const val SEARCH = "search"
     const val SEARCH_RESULT = "search_result/{keyword}"
