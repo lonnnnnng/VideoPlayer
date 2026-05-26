@@ -137,31 +137,22 @@ versionName=1.0.2
 - 安装后版本号与 Release tag 一致。
 - APK 签名和已安装应用签名一致。
 
-### 应用内更新限制
+### 应用内更新验收
 
-当前 GitHub 仓库为 private 时，App 匿名请求：
+当前应用请求公开 Release 接口：
 
 ```text
 https://api.github.com/repos/lonnnnnng/VideoPlayer/releases/latest
 ```
 
-会返回：
+接口验收：
 
-```text
-HTTP 404
-```
-
-当前应用表现：
-
-```text
-检测更新失败：暂未找到 GitHub Release
-```
-
-生产验收要求：
-
-- 更新元数据必须可被 App 访问。
-- 可使用公开仓库、公开 CDN 或服务端代理。
-- 不允许将 GitHub Token 写入 APK。
+- HTTP 状态码为 `200`。
+- 返回的最新 Release 版本高于当前安装版本时，设置页弹出更新对话框。
+- 对话框展示当前版本、新版本、更新说明和 APK 大小。
+- 点击下载后显示进度条。
+- 下载完成后唤起 Android 系统安装器。
+- 如果当前已是最新版本，设置页提示已是最新版本。
 
 ## 回归测试清单
 

@@ -113,10 +113,9 @@ https://raw.githubusercontent.com/lonnnnnng/iptv-api/refs/heads/master/output/us
 - 用户账号体系。
 - 云端同步。
 - 会员、支付或内容权益系统。
-- 将 GitHub Token 内置到 APK。
 
 ## 已知限制
 
-- GitHub private 仓库无法被 App 匿名访问 Release API。
+- 应用内更新依赖公开 GitHub Release、APK asset 和一致签名。
 - 第三方视频源和直播源可能不可用或格式变化。
 - 直播稳定性取决于上游 M3U 源质量。

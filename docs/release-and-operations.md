@@ -134,18 +134,15 @@ adb shell dumpsys package com.zy.player | rg "versionCode|versionName"
 https://api.github.com/repos/lonnnnnng/VideoPlayer/releases/latest
 ```
 
-如果仓库是 private，普通用户设备无法匿名读取该接口，会收到 `404`。
+仓库和 Release 需要保持公开可访问。应用会读取最新稳定 Release，找到其中的 APK asset，然后下载并唤起系统安装器。
 
-推荐生产方案：
+发布要求：
 
-- 使用公开 Release 仓库。
-- 将更新 JSON 和 APK 发布到公开 CDN 或对象存储。
-- 建立后端代理，由服务端持有 GitHub 凭据，App 访问自有接口。
-
-禁止事项：
-
-- 不要把 GitHub Personal Access Token 写入 APK。
-- 不要依赖 private GitHub Release 作为面向普通用户的更新源。
+- Release 不能是 draft。
+- tag 使用 `vMAJOR.MINOR.PATCH`，例如 `v1.0.3`。
+- Release assets 必须包含 `.apk` 文件。
+- APK 必须使用固定签名，确保可以覆盖安装旧版本。
+- 每次发布后需要验证 `releases/latest` 返回 `200`，且返回的版本和 APK 地址正确。
 
 ## 回滚策略
 

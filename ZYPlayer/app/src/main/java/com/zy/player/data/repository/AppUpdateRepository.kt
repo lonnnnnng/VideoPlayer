@@ -53,44 +53,50 @@ class AppUpdateRepository @Inject constructor(
                 .header("Accept", "application/vnd.github+json")
                 .header("User-Agent", USER_AGENT)
                 .build()
-            val response = okHttpClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                val message = if (response.code == 404) {
-                    "暂未找到 GitHub Release"
-                } else {
-                    "GitHub 请求失败：HTTP ${response.code}"
+            okHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException(publicReleaseErrorMessage(response.code))
                 }
-                throw IllegalStateException(message)
-            }
 
-            val body = response.body?.string().orEmpty()
-            val release = JSONObject(body)
-            val latestVersion = release.optString("tag_name")
-                .ifBlank { release.optString("name") }
-                .ifBlank { currentVersion }
+                val body = response.body?.string().orEmpty()
+                if (body.isBlank()) {
+                    throw IllegalStateException("GitHub Release 响应为空")
+                }
 
-            if (compareVersions(latestVersion, currentVersion) <= 0) {
-                return@runCatching AppUpdateCheckResult.NoUpdate(
-                    currentVersion = currentVersion,
-                    latestVersion = latestVersion
+                val release = JSONObject(body)
+                val rawLatestVersion = release.optString("tag_name")
+                    .ifBlank { release.optString("name") }
+                    .ifBlank { currentVersion }
+                val latestVersion = normalizeVersionName(rawLatestVersion)
+                    .ifBlank { currentVersion }
+
+                if (compareVersions(latestVersion, currentVersion) <= 0) {
+                    return@runCatching AppUpdateCheckResult.NoUpdate(
+                        currentVersion = currentVersion,
+                        latestVersion = latestVersion
+                    )
+                }
+
+                val apkAsset = findApkAsset(release)
+                    ?: throw IllegalStateException("新版本未附带 APK 安装包")
+                val apkUrl = apkAsset.optString("browser_download_url")
+                    .ifBlank { throw IllegalStateException("APK 下载地址为空") }
+
+                AppUpdateCheckResult.UpdateAvailable(
+                    AppUpdateInfo(
+                        currentVersion = currentVersion,
+                        latestVersion = latestVersion,
+                        releaseName = release.optString("name")
+                            .ifBlank { rawLatestVersion }
+                            .ifBlank { latestVersion },
+                        releaseNotes = release.optString("body").ifBlank { "暂无更新说明" },
+                        apkName = apkAsset.optString("name").ifBlank { "ZYPlayer-$latestVersion.apk" },
+                        apkUrl = apkUrl,
+                        releaseUrl = release.optString("html_url"),
+                        apkSize = apkAsset.optLong("size", 0L)
+                    )
                 )
             }
-
-            val apkAsset = findApkAsset(release)
-                ?: throw IllegalStateException("新版本未附带 APK 安装包")
-
-            AppUpdateCheckResult.UpdateAvailable(
-                AppUpdateInfo(
-                    currentVersion = currentVersion,
-                    latestVersion = latestVersion,
-                    releaseName = release.optString("name").ifBlank { latestVersion },
-                    releaseNotes = release.optString("body").ifBlank { "暂无更新说明" },
-                    apkName = apkAsset.optString("name").ifBlank { "ZYPlayer-$latestVersion.apk" },
-                    apkUrl = apkAsset.optString("browser_download_url"),
-                    releaseUrl = release.optString("html_url"),
-                    apkSize = apkAsset.optLong("size", 0L)
-                )
-            )
         }
     }
 
@@ -99,47 +105,57 @@ class AppUpdateRepository @Inject constructor(
         onProgress: (Int) -> Unit
     ): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
+            if (info.apkUrl.isBlank()) {
+                throw IllegalStateException("APK 下载地址为空")
+            }
+            onProgress(0)
+
             val request = Request.Builder()
                 .url(info.apkUrl)
                 .header("User-Agent", USER_AGENT)
                 .build()
-            val response = downloadClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw IllegalStateException("下载失败：HTTP ${response.code}")
-            }
-
-            val body = response.body ?: throw IllegalStateException("下载内容为空")
-            val totalBytes = body.contentLength()
             val updateDir = File(context.cacheDir, "updates").apply { mkdirs() }
             val apkFile = File(updateDir, sanitizeFileName(info.apkName)).apply {
                 if (exists()) delete()
             }
 
-            body.byteStream().use { input ->
-                apkFile.outputStream().use { output ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    var downloadedBytes = 0L
-                    var lastProgress = -1
+            downloadClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("下载失败：HTTP ${response.code}")
+                }
 
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read == -1) break
-                        output.write(buffer, 0, read)
-                        downloadedBytes += read
+                val body = response.body ?: throw IllegalStateException("下载内容为空")
+                val totalBytes = body.contentLength()
 
-                        val progress = if (totalBytes > 0L) {
-                            ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100)
-                        } else {
-                            0
-                        }
-                        if (progress != lastProgress) {
-                            lastProgress = progress
-                            onProgress(progress)
+                body.byteStream().use { input ->
+                    apkFile.outputStream().use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        var downloadedBytes = 0L
+                        var lastProgress = 0
+
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read == -1) break
+                            output.write(buffer, 0, read)
+                            downloadedBytes += read
+
+                            val progress = if (totalBytes > 0L) {
+                                ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100)
+                            } else {
+                                0
+                            }
+                            if (progress != lastProgress) {
+                                lastProgress = progress
+                                onProgress(progress)
+                            }
                         }
                     }
                 }
             }
 
+            if (!apkFile.exists() || apkFile.length() <= 0L) {
+                throw IllegalStateException("下载文件为空")
+            }
             onProgress(100)
             apkFile
         }
@@ -175,6 +191,10 @@ class AppUpdateRepository @Inject constructor(
         return 0
     }
 
+    private fun normalizeVersionName(version: String): String {
+        return version.trim().replace(Regex("^[vV]"), "")
+    }
+
     private fun extractVersionNumbers(version: String): List<Int> {
         val numbers = Regex("\\d+")
             .findAll(version)
@@ -187,6 +207,14 @@ class AppUpdateRepository @Inject constructor(
         return name.replace(Regex("[^A-Za-z0-9._-]"), "_")
             .ifBlank { "ZYPlayer-update.apk" }
             .let { if (it.endsWith(".apk", ignoreCase = true)) it else "$it.apk" }
+    }
+
+    private fun publicReleaseErrorMessage(code: Int): String {
+        return when (code) {
+            404 -> "未找到公开发布版本，请确认 GitHub Release 已发布"
+            403 -> "GitHub 请求受限，请稍后重试"
+            else -> "GitHub 请求失败：HTTP $code"
+        }
     }
 
     private companion object {

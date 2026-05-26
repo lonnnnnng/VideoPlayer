@@ -160,19 +160,12 @@ git push origin v1.0.3
 https://api.github.com/repos/lonnnnnng/VideoPlayer/releases/latest
 ```
 
-如果 GitHub 仓库是 private，Android App 匿名请求该接口会返回 `404`，即使 Release 实际存在。当前表现是设置页提示：
+仓库已设置为 public，应用会直接读取最新公开 GitHub Release。要让普通用户可以正常应用内更新，需要同时满足：
 
-```text
-检测更新失败：暂未找到 GitHub Release
-```
-
-要让普通用户可以正常应用内更新，需要满足以下任一条件：
-
-- 将仓库或 Release 下载入口调整为公开可访问。
-- 将更新元数据和 APK 放到公开 CDN 或对象存储。
-- 增加服务端代理，由服务端持有 GitHub 凭据，App 只访问自有公开接口。
-
-不要把 GitHub Token 写入 APK。
+- Release 不是 draft。
+- Release tag 版本号高于当前安装版本，例如 `v1.0.3` 高于 `1.0.2`。
+- Release assets 中包含 `.apk` 文件。
+- APK 与已安装应用使用一致签名，否则 Android 会拒绝覆盖安装。
 
 ## 文档
 

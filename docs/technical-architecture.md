@@ -133,11 +133,13 @@ https://api.github.com/repos/lonnnnnng/VideoPlayer/releases/latest
 6. 下载 APK 到应用 cache 目录，并实时更新进度。
 7. 下载完成后通过 `FileProvider` 唤起 Android 系统安装器。
 
-限制：
+公开 Release 要求：
 
-- private GitHub 仓库对匿名请求返回 `404`。
-- 生产环境不应在 APK 中内置 GitHub Token。
-- 推荐使用公开更新源或服务端代理。
+- GitHub 仓库和 Release 必须对普通用户公开可访问。
+- 最新 Release 不能是 draft，并且应作为稳定版本发布。
+- Release tag 需要使用 `vMAJOR.MINOR.PATCH` 格式，应用内展示时会去掉前导 `v`。
+- Release assets 必须包含 `.apk` 文件，并提供有效 `browser_download_url`。
+- APK 必须与已安装应用使用一致签名，否则 Android 会拒绝覆盖安装。
 
 ## 依赖注入
 

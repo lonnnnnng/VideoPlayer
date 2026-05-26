@@ -131,7 +131,7 @@ fun SettingsScreen(
                         icon = Icons.Default.Download,
                         title = "检测更新",
                         subtitle = if (updateUiState.isChecking) {
-                            "正在检查 GitHub Releases"
+                            "正在检查最新版本"
                         } else {
                             "当前版本 ${updateUiState.currentVersion}"
                         },
