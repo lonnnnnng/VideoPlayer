@@ -48,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,15 +63,16 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.theme.AppColors
@@ -127,11 +129,18 @@ fun EpisodePlayerScreen(
         onDispose { }
     }
 
+    LaunchedEffect(isFullscreen) {
+        if (isFullscreen) {
+            showControls = true
+        }
+    }
+
     val playerViewFactory: @Composable () -> Unit = {
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
             },
             update = { playerView ->
@@ -142,78 +151,77 @@ fun EpisodePlayerScreen(
     }
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            PlayerHeader(
-                eyebrow = "SERIES PLAYBACK",
-                title = "剧集播放",
-                onCastClick = { showCastDialog = true }
-            )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Spacer(modifier = Modifier.height(18.dp))
 
-            PlayerSurface(
-                isFullscreen = false,
-                showControls = showControls,
-                isPlaying = isPlaying,
-                currentPosition = currentPosition,
-                duration = duration,
-                playbackUiState = playbackUiState,
-                brightnessOverlay = brightnessOverlay,
-                volumeOverlay = volumeOverlay,
-                maxVolume = maxVolume,
-                onToggleControls = { showControls = !showControls },
-                onTogglePlay = viewModel::togglePlayPause,
-                onRetryPlayback = viewModel::retryPlayback,
-                onSeekTo = viewModel::seekTo,
-                onToggleFullscreen = {
-                    showControls = true
-                    isFullscreen = true
-                },
-                onExitFullscreen = { isFullscreen = false },
-                onBrightnessChange = { brightnessOverlay = it },
-                onVolumeChange = { volumeOverlay = it },
-                onGestureEnd = {
-                    brightnessOverlay = null
-                    volumeOverlay = null
-                },
-                audioManager = audioManager,
-                activity = activity,
-                context = context,
-                playerViewFactory = playerViewFactory
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = episodePlayerStatusTitle(
-                            title = title,
-                            episodeLabel = episodeLabel,
-                            isPlaying = isPlaying,
-                            duration = duration,
-                            currentPosition = currentPosition,
-                            playbackUiState = playbackUiState
-                        ),
-                        color = AppColors.TextPrimary,
-                        fontSize = 29.sp,
-                        lineHeight = 33.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Serif
-                    )
-                    Text(
-                        text = episodePlayerSubtitle(
-                            episodeUrl = activeEpisodeUrl,
-                            currentPosition = currentPosition,
-                            duration = duration,
-                            playbackUiState = playbackUiState
-                        ),
-                        color = AppColors.TextSecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 20.sp
+                if (!isFullscreen) {
+                    PlayerSurface(
+                        isFullscreen = false,
+                        showControls = showControls,
+                        isPlaying = isPlaying,
+                        currentPosition = currentPosition,
+                        duration = duration,
+                        playbackUiState = playbackUiState,
+                        brightnessOverlay = brightnessOverlay,
+                        volumeOverlay = volumeOverlay,
+                        maxVolume = maxVolume,
+                        onToggleControls = { showControls = !showControls },
+                        onTogglePlay = viewModel::togglePlayPause,
+                        onRetryPlayback = viewModel::retryPlayback,
+                        onSeekTo = viewModel::seekTo,
+                        onToggleFullscreen = {
+                            showControls = true
+                            isFullscreen = true
+                        },
+                        onExitFullscreen = { isFullscreen = false },
+                        onBrightnessChange = { brightnessOverlay = it },
+                        onVolumeChange = { volumeOverlay = it },
+                        onGestureEnd = {
+                            brightnessOverlay = null
+                            volumeOverlay = null
+                        },
+                        audioManager = audioManager,
+                        activity = activity,
+                        context = context,
+                        playerViewFactory = playerViewFactory
                     )
                 }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = episodePlayerStatusTitle(
+                                title = title,
+                                episodeLabel = episodeLabel,
+                                isPlaying = isPlaying,
+                                duration = duration,
+                                currentPosition = currentPosition,
+                                playbackUiState = playbackUiState
+                            ),
+                            color = AppColors.TextPrimary,
+                            fontSize = 29.sp,
+                            lineHeight = 33.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Serif
+                        )
+                        Text(
+                            text = episodePlayerSubtitle(
+                                episodeUrl = activeEpisodeUrl,
+                                currentPosition = currentPosition,
+                                duration = duration,
+                                playbackUiState = playbackUiState
+                            ),
+                            color = AppColors.TextSecondary,
+                            fontSize = 13.sp,
+                            lineHeight = 20.sp
+                        )
+                    }
 
                 LinearProgressIndicator(
                     progress = {
@@ -241,7 +249,7 @@ fun EpisodePlayerScreen(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
@@ -252,14 +260,18 @@ fun EpisodePlayerScreen(
                                 viewModel.togglePlayPause()
                             }
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp),
                         color = AppColors.SurfaceAlt,
                         contentColor = AppColors.TextPrimary,
                         shape = RoundedCornerShape(14.dp),
                         border = BorderStroke(1.dp, AppColors.Divider)
                     ) {
                         Row(
-                            modifier = Modifier.padding(vertical = 11.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 8.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -267,17 +279,20 @@ fun EpisodePlayerScreen(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = null,
                                 tint = AppColors.Primary,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
                             Text(
                                 text = when {
-                                    playbackUiState.isFailed -> "重试线路"
+                                    playbackUiState.isFailed -> "重试"
                                     isPlaying -> "暂停"
                                     else -> "播放"
                                 },
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Clip,
+                                softWrap = false
                             )
                         }
                     }
@@ -289,14 +304,27 @@ fun EpisodePlayerScreen(
                             viewModel.loadSourceOptions()
                             showSourceDialog = true
                         },
-                        modifier = Modifier.width(78.dp)
+                        modifier = Modifier
+                            .width(70.dp)
+                            .height(46.dp)
                     )
 
                     PlayerUtilityButton(
                         icon = Icons.Default.Speed,
                         label = "${playbackSpeed}x",
                         onClick = { showSpeedDialog = true },
-                        modifier = Modifier.width(74.dp)
+                        modifier = Modifier
+                            .width(72.dp)
+                            .height(46.dp)
+                    )
+
+                    PlayerUtilityButton(
+                        icon = Icons.Default.Cast,
+                        label = null,
+                        onClick = { showCastDialog = true },
+                        modifier = Modifier
+                            .width(46.dp)
+                            .height(46.dp)
                     )
 
                     PlayerUtilityButton(
@@ -306,48 +334,53 @@ fun EpisodePlayerScreen(
                             showControls = true
                             isFullscreen = true
                         },
-                        modifier = Modifier.width(48.dp)
+                        modifier = Modifier
+                            .width(46.dp)
+                            .height(46.dp)
                     )
                 }
             }
-        }
-    }
+            }
 
-    if (isFullscreen) {
-        Dialog(
-            onDismissRequest = { isFullscreen = false },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
-            )
-        ) {
-            PlayerSurface(
-                isFullscreen = true,
-                showControls = showControls,
-                isPlaying = isPlaying,
-                currentPosition = currentPosition,
-                duration = duration,
-                playbackUiState = playbackUiState,
-                brightnessOverlay = brightnessOverlay,
-                volumeOverlay = volumeOverlay,
-                maxVolume = maxVolume,
-                onToggleControls = { showControls = !showControls },
-                onTogglePlay = viewModel::togglePlayPause,
-                onRetryPlayback = viewModel::retryPlayback,
-                onSeekTo = viewModel::seekTo,
-                onToggleFullscreen = { isFullscreen = false },
-                onExitFullscreen = { isFullscreen = false },
-                onBrightnessChange = { brightnessOverlay = it },
-                onVolumeChange = { volumeOverlay = it },
-                onGestureEnd = {
-                    brightnessOverlay = null
-                    volumeOverlay = null
-                },
-                audioManager = audioManager,
-                activity = activity,
-                context = context,
-                playerViewFactory = playerViewFactory
-            )
+            if (isFullscreen) {
+                PlayerSurface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(10f),
+                    isFullscreen = true,
+                    showControls = showControls,
+                    isPlaying = isPlaying,
+                    currentPosition = currentPosition,
+                    duration = duration,
+                    playbackUiState = playbackUiState,
+                    brightnessOverlay = brightnessOverlay,
+                    volumeOverlay = volumeOverlay,
+                    maxVolume = maxVolume,
+                    onToggleControls = { showControls = !showControls },
+                    onTogglePlay = viewModel::togglePlayPause,
+                    onRetryPlayback = viewModel::retryPlayback,
+                    onSeekTo = viewModel::seekTo,
+                    onToggleFullscreen = { isFullscreen = false },
+                    onSourceClick = {
+                        viewModel.loadSourceOptions()
+                        showSourceDialog = true
+                    },
+                    onSpeedClick = { showSpeedDialog = true },
+                    playbackSpeedLabel = "${playbackSpeed}x",
+                    onCastClick = { showCastDialog = true },
+                    onExitFullscreen = { isFullscreen = false },
+                    onBrightnessChange = { brightnessOverlay = it },
+                    onVolumeChange = { volumeOverlay = it },
+                    onGestureEnd = {
+                        brightnessOverlay = null
+                        volumeOverlay = null
+                    },
+                    audioManager = audioManager,
+                    activity = activity,
+                    context = context,
+                    playerViewFactory = playerViewFactory
+                )
+            }
         }
     }
 
@@ -359,19 +392,41 @@ fun EpisodePlayerScreen(
             textContentColor = AppColors.TextSecondary,
             title = { Text("播放速度") },
             text = {
-                Column {
-                    listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
-                        TextButton(
-                            onClick = {
-                                viewModel.setSpeed(speed)
-                                showSpeedDialog = false
-                            },
-                            modifier = Modifier.fillMaxWidth()
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        0.5f,
+                        0.75f,
+                        1.0f,
+                        1.25f,
+                        1.5f,
+                        2.0f,
+                        2.5f,
+                        3.0f,
+                        4.0f
+                    ).chunked(3).forEach { rowSpeeds ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text(
-                                text = "${speed}x",
-                                color = if (speed == playbackSpeed) AppColors.Primary else AppColors.TextPrimary
-                            )
+                            rowSpeeds.forEach { speed ->
+                                TextButton(
+                                    onClick = {
+                                        viewModel.setSpeed(speed)
+                                        showSpeedDialog = false
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                ) {
+                                    Text(
+                                        text = "${speed}x",
+                                        color = if (speed == playbackSpeed) AppColors.Primary else AppColors.TextPrimary,
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -509,11 +564,18 @@ fun LivePlayerScreen(
         onDispose { }
     }
 
+    LaunchedEffect(isFullscreen) {
+        if (isFullscreen) {
+            showControls = true
+        }
+    }
+
     val playerViewFactory: @Composable () -> Unit = {
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
             },
             update = { playerView ->
@@ -524,188 +586,195 @@ fun LivePlayerScreen(
     }
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            PlayerHeader(
-                eyebrow = "IPTV LIVE",
-                title = "直播播放",
-                onCastClick = { showCastDialog = true }
-            )
-
-            PlayerSurface(
-                isFullscreen = false,
-                showControls = showControls,
-                isPlaying = isPlaying,
-                currentPosition = currentPosition,
-                duration = duration,
-                playbackUiState = playbackUiState,
-                recoveringBadge = "直播缓冲",
-                recoveringTitle = "正在连接直播流",
-                brightnessOverlay = brightnessOverlay,
-                volumeOverlay = volumeOverlay,
-                maxVolume = maxVolume,
-                onToggleControls = { showControls = !showControls },
-                onTogglePlay = viewModel::togglePlayPause,
-                onRetryPlayback = viewModel::retryPlayback,
-                onSeekTo = viewModel::seekTo,
-                onToggleFullscreen = {
-                    showControls = true
-                    isFullscreen = true
-                },
-                onExitFullscreen = { isFullscreen = false },
-                onBrightnessChange = { brightnessOverlay = it },
-                onVolumeChange = { volumeOverlay = it },
-                onGestureEnd = {
-                    brightnessOverlay = null
-                    volumeOverlay = null
-                },
-                audioManager = audioManager,
-                activity = activity,
-                context = context,
-                playerViewFactory = playerViewFactory
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = livePlayerStatusTitle(
-                            title = title,
-                            isPlaying = isPlaying,
-                            playbackUiState = playbackUiState
-                        ),
-                        color = AppColors.TextPrimary,
-                        fontSize = 29.sp,
-                        lineHeight = 33.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Serif
-                    )
-                    Text(
-                        text = livePlayerSubtitle(
-                            group = group,
-                            format = format,
-                            liveUrl = activeLiveUrl,
-                            playbackUiState = playbackUiState
-                        ),
-                        color = AppColors.TextSecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 20.sp
-                    )
-                }
-
-                LinearProgressIndicator(
-                    progress = { if (duration > 0) currentPosition.toFloat() / duration else 0f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(5.dp)
-                        .clip(RoundedCornerShape(999.dp)),
-                    color = AppColors.Primary,
-                    trackColor = Color.White.copy(alpha = 0.12f)
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                PlayerHeader(
+                    eyebrow = "IPTV LIVE",
+                    title = "直播播放",
+                    onCastClick = { showCastDialog = true }
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PlayerMetaPill("直播")
-                    PlayerMetaPill(playerSourceLabel(activeLiveUrl))
-                    PlayerMetaPill(format.ifBlank { "IPTV" })
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        onClick = {
-                            if (playbackUiState.isFailed) {
-                                viewModel.retryPlayback()
-                            } else {
-                                viewModel.togglePlayPause()
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        color = AppColors.SurfaceAlt,
-                        contentColor = AppColors.TextPrimary,
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, AppColors.Divider)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 11.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = AppColors.Primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = when {
-                                    playbackUiState.isFailed -> "重试直播"
-                                    isPlaying -> "暂停"
-                                    else -> "播放"
-                                },
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-
-                    PlayerUtilityButton(
-                        icon = Icons.Default.Fullscreen,
-                        label = null,
-                        onClick = {
+                if (!isFullscreen) {
+                    PlayerSurface(
+                        isFullscreen = false,
+                        showControls = showControls,
+                        isPlaying = isPlaying,
+                        currentPosition = currentPosition,
+                        duration = duration,
+                        playbackUiState = playbackUiState,
+                        recoveringTitle = "正在连接直播流",
+                        brightnessOverlay = brightnessOverlay,
+                        volumeOverlay = volumeOverlay,
+                        maxVolume = maxVolume,
+                        onToggleControls = { showControls = !showControls },
+                        onTogglePlay = viewModel::togglePlayPause,
+                        onRetryPlayback = viewModel::retryPlayback,
+                        onSeekTo = viewModel::seekTo,
+                        onToggleFullscreen = {
                             showControls = true
                             isFullscreen = true
                         },
-                        modifier = Modifier.width(48.dp)
+                        onExitFullscreen = { isFullscreen = false },
+                        onBrightnessChange = { brightnessOverlay = it },
+                        onVolumeChange = { volumeOverlay = it },
+                        onGestureEnd = {
+                            brightnessOverlay = null
+                            volumeOverlay = null
+                        },
+                        audioManager = audioManager,
+                        activity = activity,
+                        context = context,
+                        playerViewFactory = playerViewFactory
                     )
                 }
-            }
-        }
-    }
 
-    if (isFullscreen) {
-        Dialog(
-            onDismissRequest = { isFullscreen = false },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
-            )
-        ) {
-            PlayerSurface(
-                isFullscreen = true,
-                showControls = showControls,
-                isPlaying = isPlaying,
-                currentPosition = currentPosition,
-                duration = duration,
-                playbackUiState = playbackUiState,
-                recoveringBadge = "直播缓冲",
-                recoveringTitle = "正在连接直播流",
-                brightnessOverlay = brightnessOverlay,
-                volumeOverlay = volumeOverlay,
-                maxVolume = maxVolume,
-                onToggleControls = { showControls = !showControls },
-                onTogglePlay = viewModel::togglePlayPause,
-                onRetryPlayback = viewModel::retryPlayback,
-                onSeekTo = viewModel::seekTo,
-                onToggleFullscreen = { isFullscreen = false },
-                onExitFullscreen = { isFullscreen = false },
-                onBrightnessChange = { brightnessOverlay = it },
-                onVolumeChange = { volumeOverlay = it },
-                onGestureEnd = {
-                    brightnessOverlay = null
-                    volumeOverlay = null
-                },
-                audioManager = audioManager,
-                activity = activity,
-                context = context,
-                playerViewFactory = playerViewFactory
-            )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = livePlayerStatusTitle(
+                                title = title,
+                                isPlaying = isPlaying,
+                                playbackUiState = playbackUiState
+                            ),
+                            color = AppColors.TextPrimary,
+                            fontSize = 29.sp,
+                            lineHeight = 33.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Serif
+                        )
+                        Text(
+                            text = livePlayerSubtitle(
+                                group = group,
+                                format = format,
+                                liveUrl = activeLiveUrl,
+                                playbackUiState = playbackUiState
+                            ),
+                            color = AppColors.TextSecondary,
+                            fontSize = 13.sp,
+                            lineHeight = 20.sp
+                        )
+                    }
+
+                    LinearProgressIndicator(
+                        progress = { if (duration > 0) currentPosition.toFloat() / duration else 0f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(999.dp)),
+                        color = AppColors.Primary,
+                        trackColor = Color.White.copy(alpha = 0.12f)
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PlayerMetaPill("直播")
+                        PlayerMetaPill(playerSourceLabel(activeLiveUrl))
+                        PlayerMetaPill(format.ifBlank { "IPTV" })
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            onClick = {
+                                if (playbackUiState.isFailed) {
+                                    viewModel.retryPlayback()
+                                } else {
+                                    viewModel.togglePlayPause()
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            color = AppColors.SurfaceAlt,
+                            contentColor = AppColors.TextPrimary,
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, AppColors.Divider)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 8.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = AppColors.Primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = when {
+                                        playbackUiState.isFailed -> "重试直播"
+                                        isPlaying -> "暂停"
+                                        else -> "播放"
+                                    },
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Clip,
+                                    softWrap = false
+                                )
+                            }
+                        }
+
+                        PlayerUtilityButton(
+                            icon = Icons.Default.Fullscreen,
+                            label = null,
+                            onClick = {
+                                showControls = true
+                                isFullscreen = true
+                            },
+                            modifier = Modifier
+                                .width(46.dp)
+                                .height(46.dp)
+                        )
+                    }
+                }
+            }
+
+            if (isFullscreen) {
+                PlayerSurface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(10f),
+                    isFullscreen = true,
+                    showControls = showControls,
+                    isPlaying = isPlaying,
+                    currentPosition = currentPosition,
+                    duration = duration,
+                    playbackUiState = playbackUiState,
+                    recoveringTitle = "正在连接直播流",
+                    brightnessOverlay = brightnessOverlay,
+                    volumeOverlay = volumeOverlay,
+                    maxVolume = maxVolume,
+                    onToggleControls = { showControls = !showControls },
+                    onTogglePlay = viewModel::togglePlayPause,
+                    onRetryPlayback = viewModel::retryPlayback,
+                    onSeekTo = viewModel::seekTo,
+                    onToggleFullscreen = { isFullscreen = false },
+                    onCastClick = { showCastDialog = true },
+                    onExitFullscreen = { isFullscreen = false },
+                    onBrightnessChange = { brightnessOverlay = it },
+                    onVolumeChange = { volumeOverlay = it },
+                    onGestureEnd = {
+                        brightnessOverlay = null
+                        volumeOverlay = null
+                    },
+                    audioManager = audioManager,
+                    activity = activity,
+                    context = context,
+                    playerViewFactory = playerViewFactory
+                )
+            }
         }
     }
 
@@ -769,13 +838,13 @@ private fun PlayerHeader(
 
 @Composable
 private fun PlayerSurface(
+    modifier: Modifier = Modifier,
     isFullscreen: Boolean,
     showControls: Boolean,
     isPlaying: Boolean,
     currentPosition: Long,
     duration: Long,
     playbackUiState: PlaybackUiState,
-    recoveringBadge: String = "正在切线",
     recoveringTitle: String = "正在切换备用线路",
     brightnessOverlay: Float?,
     volumeOverlay: Int?,
@@ -785,6 +854,10 @@ private fun PlayerSurface(
     onRetryPlayback: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onToggleFullscreen: () -> Unit,
+    onSourceClick: (() -> Unit)? = null,
+    onSpeedClick: (() -> Unit)? = null,
+    playbackSpeedLabel: String? = null,
+    onCastClick: (() -> Unit)? = null,
     onExitFullscreen: () -> Unit,
     onBrightnessChange: (Float) -> Unit,
     onVolumeChange: (Int) -> Unit,
@@ -795,7 +868,7 @@ private fun PlayerSurface(
     playerViewFactory: @Composable () -> Unit
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .then(
                 if (isFullscreen) {
                     Modifier.fillMaxSize()
@@ -852,25 +925,6 @@ private fun PlayerSurface(
             }
     ) {
         playerViewFactory()
-
-        if (!isFullscreen) {
-            Text(
-                text = when {
-                    playbackUiState.isFailed -> "线路失效"
-                    playbackUiState.isRecovering -> recoveringBadge
-                    else -> "正在播放"
-                },
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(18.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(AppColors.Primary)
-                    .padding(horizontal = 9.dp, vertical = 6.dp),
-                color = AppColors.Background,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Black
-            )
-        }
 
         brightnessOverlay?.let { brightness ->
             GestureOverlay(
@@ -967,11 +1021,62 @@ private fun PlayerSurface(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        IconButton(onClick = onToggleFullscreen) {
-                            Icon(
-                                imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                contentDescription = if (isFullscreen) "退出全屏" else "全屏",
-                                tint = Color.White
+                        if (!isFullscreen) {
+                            IconButton(onClick = onToggleFullscreen) {
+                                Icon(
+                                    imageVector = Icons.Default.Fullscreen,
+                                    contentDescription = "全屏",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    }
+
+                    if (isFullscreen) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            onSourceClick?.let { sourceClick ->
+                                PlayerFullscreenActionButton(
+                                    icon = Icons.Default.SwapHoriz,
+                                    label = "换源",
+                                    onClick = sourceClick,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(40.dp)
+                                )
+                            }
+                            if (onSpeedClick != null && playbackSpeedLabel != null) {
+                                PlayerFullscreenActionButton(
+                                    icon = Icons.Default.Speed,
+                                    label = playbackSpeedLabel,
+                                    onClick = onSpeedClick,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(40.dp)
+                                )
+                            }
+                            onCastClick?.let { castClick ->
+                                PlayerFullscreenActionButton(
+                                    icon = Icons.Default.Cast,
+                                    label = "投屏",
+                                    onClick = castClick,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(40.dp)
+                                )
+                            }
+                            PlayerFullscreenActionButton(
+                                icon = Icons.Default.FullscreenExit,
+                                label = "退出",
+                                onClick = onToggleFullscreen,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
                             )
                         }
                     }
@@ -1081,8 +1186,11 @@ private fun PlayerUtilityButton(
         shape = shape,
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
+        val horizontalPadding = if (label == null) 0.dp else 8.dp
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = horizontalPadding),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1090,16 +1198,61 @@ private fun PlayerUtilityButton(
                 imageVector = icon,
                 contentDescription = null,
                 tint = AppColors.TextPrimary,
-                modifier = Modifier.size(17.dp)
+                modifier = Modifier.size(16.dp)
             )
             if (label != null) {
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = label,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    softWrap = false
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun PlayerFullscreenActionButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        color = Color.Black.copy(alpha = 0.46f),
+        contentColor = Color.White,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = label,
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                softWrap = false
+            )
         }
     }
 }
