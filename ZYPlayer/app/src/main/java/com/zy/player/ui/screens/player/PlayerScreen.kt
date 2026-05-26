@@ -104,6 +104,7 @@ fun EpisodePlayerScreen(
     val activeEpisodeUrl by viewModel.activeEpisodeUrl.collectAsState()
     val playbackUiState by viewModel.playbackUiState.collectAsState()
     val sourceOptions by viewModel.sourceOptions.collectAsState()
+    val playbackStats by viewModel.playbackStats.collectAsState()
 
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showSourceDialog by remember { mutableStateOf(false) }
@@ -245,6 +246,8 @@ fun EpisodePlayerScreen(
                             }
                         )
                     }
+
+                    PlaybackStatsRow(stats = playbackStats)
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1267,6 +1270,73 @@ private fun PlayerMetaPill(text: String) {
 }
 
 @Composable
+private fun PlaybackStatsRow(stats: PlaybackStats) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        PlayerStatsCell(
+            label = "分辨率",
+            value = formatResolution(stats.resolutionWidth, stats.resolutionHeight),
+            modifier = Modifier.weight(1f)
+        )
+        PlayerStatsCell(
+            label = "码率",
+            value = formatBitrate(stats.videoBitrateBitsPerSecond),
+            modifier = Modifier.weight(1f)
+        )
+        PlayerStatsCell(
+            label = "网速",
+            value = formatBitrate(stats.networkSpeedBitsPerSecond),
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun PlayerStatsCell(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.height(46.dp),
+        color = AppColors.SurfaceAlt,
+        contentColor = AppColors.TextPrimary,
+        shape = RoundedCornerShape(13.dp),
+        border = BorderStroke(1.dp, AppColors.Divider)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = label,
+                color = AppColors.TextTertiary,
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
+            )
+            Text(
+                text = value,
+                color = AppColors.TextPrimary,
+                fontSize = 12.sp,
+                lineHeight = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
+            )
+        }
+    }
+}
+
+@Composable
 private fun PlayerUtilityButton(
     icon: ImageVector,
     label: String?,
@@ -1419,6 +1489,28 @@ private fun formatTime(ms: Long): String {
         String.format("%d:%02d:%02d", hours, minutes, seconds)
     } else {
         String.format("%02d:%02d", minutes, seconds)
+    }
+}
+
+private fun formatResolution(width: Int, height: Int): String {
+    return if (width > 0 && height > 0) {
+        "${width}x$height"
+    } else {
+        "待获取"
+    }
+}
+
+private fun formatBitrate(bitsPerSecond: Long): String {
+    if (bitsPerSecond <= 0L) return "待获取"
+    return if (bitsPerSecond >= 1_000_000L) {
+        val mbps = bitsPerSecond / 1_000_000f
+        if (mbps >= 10f) {
+            String.format("%.0f Mbps", mbps)
+        } else {
+            String.format("%.1f Mbps", mbps)
+        }
+    } else {
+        "${(bitsPerSecond / 1_000L).coerceAtLeast(1L)} Kbps"
     }
 }
 

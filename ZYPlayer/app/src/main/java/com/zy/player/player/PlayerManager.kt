@@ -6,6 +6,7 @@ import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.OkHttpClient
@@ -93,6 +94,14 @@ class PlayerManager @Inject constructor(
         if (currentListener == listener) {
             currentListener = null
         }
+    }
+
+    fun addAnalyticsListener(listener: AnalyticsListener) {
+        getPlayer().addAnalyticsListener(listener)
+    }
+
+    fun removeAnalyticsListener(listener: AnalyticsListener) {
+        exoPlayer?.removeAnalyticsListener(listener)
     }
 
     fun release() {

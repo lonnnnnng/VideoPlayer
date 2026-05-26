@@ -4,8 +4,14 @@ import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.MediaLoadData
 import com.zy.player.data.repository.HistoryRepository
 import com.zy.player.data.repository.SiteRepository
 import com.zy.player.data.repository.VodRepository
@@ -41,6 +47,13 @@ data class PlayerSourceOption(
     val isCurrent: Boolean
 )
 
+data class PlaybackStats(
+    val resolutionWidth: Int = 0,
+    val resolutionHeight: Int = 0,
+    val videoBitrateBitsPerSecond: Long = 0L,
+    val networkSpeedBitsPerSecond: Long = 0L
+)
+
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val playerManager: PlayerManager,
@@ -53,6 +66,7 @@ class PlayerViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "PlayerViewModel"
+        private const val MIN_VIDEO_BITRATE_BITS_PER_SECOND = 50_000
     }
 
     private val siteId: Long = savedStateHandle.get<Long>("siteId") ?: 0L
@@ -91,6 +105,9 @@ class PlayerViewModel @Inject constructor(
 
     private val _sourceOptions = MutableStateFlow<List<PlayerSourceOption>>(emptyList())
     val sourceOptions: StateFlow<List<PlayerSourceOption>> = _sourceOptions.asStateFlow()
+
+    private val _playbackStats = MutableStateFlow(PlaybackStats())
+    val playbackStats: StateFlow<PlaybackStats> = _playbackStats.asStateFlow()
 
     private var progressUpdateJob: Job? = null
     private val playbackCandidates = mutableListOf<PlaybackCandidate>()
@@ -152,12 +169,41 @@ class PlayerViewModel @Inject constructor(
             Log.e(TAG, "onPlayerError - errorCode=${error.errorCode}, message=${error.message}", error)
             recoverFromPlaybackError(error)
         }
+
+        override fun onTracksChanged(tracks: Tracks) {
+            updateVideoFormat(selectCurrentVideoFormat(tracks))
+        }
+
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            updateVideoSize(videoSize.width, videoSize.height)
+        }
+    }
+
+    private val analyticsListener = object : AnalyticsListener {
+        override fun onBandwidthEstimate(
+            eventTime: AnalyticsListener.EventTime,
+            totalLoadTimeMs: Int,
+            totalBytesLoaded: Long,
+            bitrateEstimate: Long
+        ) {
+            updateNetworkSpeed(totalLoadTimeMs, totalBytesLoaded, bitrateEstimate)
+        }
+
+        override fun onDownstreamFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            mediaLoadData: MediaLoadData
+        ) {
+            if (mediaLoadData.trackType == C.TRACK_TYPE_VIDEO) {
+                updateVideoFormat(mediaLoadData.trackFormat)
+            }
+        }
     }
 
     init {
         Log.d(TAG, "init - siteId=$siteId, vodId=$vodId")
         Log.d(TAG, "init - episodeUrl=$episodeUrl")
         playerManager.addListener(playerListener)
+        playerManager.addAnalyticsListener(analyticsListener)
         if (episodeUrl.isNotBlank()) {
             playbackCandidates += PlaybackCandidate(
                 siteId = siteId,
@@ -287,6 +333,7 @@ class PlayerViewModel @Inject constructor(
         _activeEpisodeUrl.value = candidate.url
         _currentPosition.value = 0L
         _duration.value = 0L
+        _playbackStats.value = PlaybackStats()
         publishSourceOptions()
         _playbackUiState.value = PlaybackUiState(
             sourceName = candidate.sourceName,
@@ -507,6 +554,69 @@ class PlayerViewModel @Inject constructor(
         progressUpdateJob?.cancel()
     }
 
+    private fun updateVideoSize(width: Int, height: Int) {
+        if (width <= 0 || height <= 0) return
+        _playbackStats.value = _playbackStats.value.copy(
+            resolutionWidth = width,
+            resolutionHeight = height
+        )
+    }
+
+    private fun updateVideoFormat(format: Format?) {
+        if (format == null) return
+
+        val nextWidth = format.width.takeIf { it > 0 } ?: _playbackStats.value.resolutionWidth
+        val nextHeight = format.height.takeIf { it > 0 } ?: _playbackStats.value.resolutionHeight
+        val nextBitrate = firstReasonableVideoBitrate(
+            format.bitrate,
+            format.averageBitrate,
+            format.peakBitrate
+        )?.toLong() ?: _playbackStats.value.videoBitrateBitsPerSecond
+
+        _playbackStats.value = _playbackStats.value.copy(
+            resolutionWidth = nextWidth,
+            resolutionHeight = nextHeight,
+            videoBitrateBitsPerSecond = nextBitrate
+        )
+    }
+
+    private fun updateNetworkSpeed(totalLoadTimeMs: Int, totalBytesLoaded: Long, bitrateEstimate: Long) {
+        val sampleSpeed = if (totalLoadTimeMs > 0 && totalBytesLoaded > 0L) {
+            totalBytesLoaded.coerceAtMost(Long.MAX_VALUE / 8_000L) * 8_000L / totalLoadTimeMs
+        } else {
+            0L
+        }
+        val nextSpeed = when {
+            sampleSpeed > 0L -> sampleSpeed
+            bitrateEstimate > 0L -> bitrateEstimate
+            else -> 0L
+        }
+        if (nextSpeed <= 0L) return
+
+        _playbackStats.value = _playbackStats.value.copy(
+            networkSpeedBitsPerSecond = nextSpeed
+        )
+    }
+
+    private fun selectCurrentVideoFormat(tracks: Tracks): Format? {
+        tracks.groups.forEach { group ->
+            if (group.type == C.TRACK_TYPE_VIDEO && group.isSelected) {
+                for (index in 0 until group.length) {
+                    if (group.isTrackSelected(index)) {
+                        return group.getTrackFormat(index)
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun firstReasonableVideoBitrate(vararg values: Int): Int? {
+        return values.firstOrNull {
+            it != Format.NO_VALUE && it >= MIN_VIDEO_BITRATE_BITS_PER_SECOND
+        }
+    }
+
     fun savePlaybackPosition(vodName: String, vodPic: String, episodeLabel: String) {
         viewModelScope.launch {
             Log.d(TAG, "savePlaybackPosition - vodName=$vodName, position=${_currentPosition.value}ms, duration=${_duration.value}ms")
@@ -528,6 +638,7 @@ class PlayerViewModel @Inject constructor(
         super.onCleared()
         Log.d(TAG, "onCleared - Cleaning up")
         stopProgressUpdates()
+        playerManager.removeAnalyticsListener(analyticsListener)
         playerManager.removeListener(playerListener)
     }
 
