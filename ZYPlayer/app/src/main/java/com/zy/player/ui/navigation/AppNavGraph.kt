@@ -213,7 +213,8 @@ fun AppNavGraph(
                     vodId = vodId,
                     episodeUrl = episodeUrl,
                     title = title,
-                    episodeLabel = episodeLabel
+                    episodeLabel = episodeLabel,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
 
