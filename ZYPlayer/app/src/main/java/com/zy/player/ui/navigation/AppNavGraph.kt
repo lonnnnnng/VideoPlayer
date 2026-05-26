@@ -7,7 +7,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -30,23 +29,22 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.zy.player.ui.screens.detail.DetailScreen
+import com.zy.player.ui.screens.detail.EpisodeListScreen
 import com.zy.player.ui.screens.history.HistoryScreen
 import com.zy.player.ui.screens.home.HomeScreen
 import com.zy.player.ui.screens.live.LiveScreen
 import com.zy.player.ui.screens.livesource.LiveSourceManagementScreen
-import com.zy.player.ui.screens.player.PlayerPreviewScreen
-import com.zy.player.ui.screens.player.PlayerScreen
+import com.zy.player.ui.screens.player.EpisodePlayerScreen
+import com.zy.player.ui.screens.player.LivePlayerScreen
 import com.zy.player.ui.screens.search.SearchScreen
 import com.zy.player.ui.screens.searchresult.SearchResultScreen
 import com.zy.player.ui.screens.settings.SettingsScreen
 import com.zy.player.ui.screens.sitemanagement.SiteManagementScreen
 import com.zy.player.ui.theme.AppColors
-import com.zy.player.ui.screens.detail.EpisodeListScreen
 
 sealed class BottomNavItem(val route: String, val icon: ImageVector, val label: String) {
     object Home : BottomNavItem(Destinations.HOME, Icons.Default.Home, "首页")
     object Live : BottomNavItem(Destinations.LIVE, Icons.Default.LiveTv, "直播")
-    object Player : BottomNavItem(Destinations.PLAYER_PREVIEW, Icons.Default.PlayCircle, "播放")
     object Settings : BottomNavItem(Destinations.SETTINGS, Icons.Default.Settings, "设置")
 }
 
@@ -57,7 +55,6 @@ fun AppNavGraph(
     val bottomNavItems = listOf(
         BottomNavItem.Home,
         BottomNavItem.Live,
-        BottomNavItem.Player,
         BottomNavItem.Settings
     )
 
@@ -66,8 +63,7 @@ fun AppNavGraph(
 
     val prototypeRoutes = bottomNavItems.map { it.route } + listOf(
         Destinations.DETAIL,
-        Destinations.EPISODES,
-        Destinations.PLAYER
+        Destinations.EPISODES
     )
     val showBottomBar = currentDestination?.route in prototypeRoutes
 
@@ -109,8 +105,15 @@ fun AppNavGraph(
 
             composable(Destinations.LIVE) {
                 LiveScreen(
-                    onNavigateToPlayer = { url ->
-                        navController.navigate(Destinations.player(0, "live", url))
+                    onNavigateToPlayer = { channel ->
+                        navController.navigate(
+                            Destinations.livePlayer(
+                                url = channel.url,
+                                title = channel.name,
+                                group = channel.group,
+                                format = channel.format
+                            )
+                        )
                     }
                 )
             }
@@ -121,10 +124,6 @@ fun AppNavGraph(
                     onNavigateToSiteManagement = { navController.navigate(Destinations.SITE_MANAGEMENT) },
                     onNavigateToLiveSourceManagement = { navController.navigate(Destinations.LIVE_SOURCE_MANAGEMENT) }
                 )
-            }
-
-            composable(Destinations.PLAYER_PREVIEW) {
-                PlayerPreviewScreen()
             }
 
             composable(Destinations.SEARCH) {
@@ -163,12 +162,9 @@ fun AppNavGraph(
                     siteId = siteId,
                     vodId = vodId,
                     onNavigateBack = { navController.popBackStack() },
-                    onNavigateToEpisodes = { detailSiteId, detailVodId ->
-                        navController.navigate(Destinations.episodes(detailSiteId, detailVodId))
-                    },
                     onNavigateToPlayer = { playerSiteId, playerVodId, episodeUrl, title, episodeLabel ->
                         navController.navigate(
-                            Destinations.player(playerSiteId, playerVodId, episodeUrl, title, episodeLabel)
+                            Destinations.episodePlayer(playerSiteId, playerVodId, episodeUrl, title, episodeLabel)
                         )
                     }
                 )
@@ -185,14 +181,14 @@ fun AppNavGraph(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToPlayer = { playerSiteId, playerVodId, episodeUrl, title, episodeLabel ->
                         navController.navigate(
-                            Destinations.player(playerSiteId, playerVodId, episodeUrl, title, episodeLabel)
+                            Destinations.episodePlayer(playerSiteId, playerVodId, episodeUrl, title, episodeLabel)
                         )
                     }
                 )
             }
 
             composable(
-                route = Destinations.PLAYER,
+                route = Destinations.EPISODE_PLAYER,
                 arguments = listOf(
                     navArgument("siteId") { type = NavType.LongType },
                     navArgument("vodId") { type = NavType.StringType },
@@ -212,7 +208,7 @@ fun AppNavGraph(
                 val episodeUrl = backStackEntry.arguments?.getString("episodeUrl") ?: ""
                 val title = backStackEntry.arguments?.getString("title").orEmpty()
                 val episodeLabel = backStackEntry.arguments?.getString("episodeLabel").orEmpty()
-                PlayerScreen(
+                EpisodePlayerScreen(
                     siteId = siteId,
                     vodId = vodId,
                     episodeUrl = episodeUrl,
@@ -221,12 +217,42 @@ fun AppNavGraph(
                 )
             }
 
+            composable(
+                route = Destinations.LIVE_PLAYER,
+                arguments = listOf(
+                    navArgument("url") { type = NavType.StringType },
+                    navArgument("title") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                    navArgument("group") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                    navArgument("format") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                )
+            ) { backStackEntry ->
+                val url = backStackEntry.arguments?.getString("url").orEmpty()
+                val title = backStackEntry.arguments?.getString("title").orEmpty()
+                val group = backStackEntry.arguments?.getString("group").orEmpty()
+                val format = backStackEntry.arguments?.getString("format").orEmpty()
+                LivePlayerScreen(
+                    url = url,
+                    title = title,
+                    group = group,
+                    format = format
+                )
+            }
+
             composable(Destinations.HISTORY) {
                 HistoryScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToPlayer = { siteId, vodId, episodeUrl, title, episodeLabel ->
                         navController.navigate(
-                            Destinations.player(siteId, vodId, episodeUrl, title, episodeLabel)
+                            Destinations.episodePlayer(siteId, vodId, episodeUrl, title, episodeLabel)
                         )
                     }
                 )
@@ -290,8 +316,7 @@ private fun FloatingCinemaNavigationBar(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items.forEach { item ->
-                    val selected = currentRoute == item.route ||
-                        (item.route == Destinations.PLAYER_PREVIEW && currentRoute == Destinations.PLAYER)
+                    val selected = currentRoute == item.route
                     Surface(
                         onClick = { onItemClick(item) },
                         modifier = Modifier

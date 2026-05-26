@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -78,7 +77,7 @@ import com.zy.player.ui.theme.AppColors
 import kotlin.math.abs
 
 @Composable
-fun PlayerScreen(
+fun EpisodePlayerScreen(
     siteId: Long,
     vodId: String,
     episodeUrl: String,
@@ -87,7 +86,7 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     @Suppress("UNUSED_VARIABLE")
-    val unusedSiteId = siteId
+    val unusedRouteArgs = Triple(siteId, vodId, episodeUrl)
     val context = LocalContext.current
     val activity = context as? Activity
 
@@ -145,6 +144,8 @@ fun PlayerScreen(
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             PlayerHeader(
+                eyebrow = "SERIES PLAYBACK",
+                title = "剧集播放",
                 onCastClick = { showCastDialog = true }
             )
 
@@ -187,8 +188,7 @@ fun PlayerScreen(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = playerStatusTitle(
-                            vodId = vodId,
+                        text = episodePlayerStatusTitle(
                             title = title,
                             episodeLabel = episodeLabel,
                             isPlaying = isPlaying,
@@ -203,8 +203,7 @@ fun PlayerScreen(
                         fontFamily = FontFamily.Serif
                     )
                     Text(
-                        text = playerSubtitle(
-                            vodId = vodId,
+                        text = episodePlayerSubtitle(
                             episodeUrl = activeEpisodeUrl,
                             currentPosition = currentPosition,
                             duration = duration,
@@ -410,9 +409,7 @@ fun PlayerScreen(
             title = { Text("播放换源") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (vodId == "live") {
-                        Text("直播频道暂不支持按剧集换源。")
-                    } else if (sourceOptions.isEmpty()) {
+                    if (sourceOptions.isEmpty()) {
                         Text("正在查找同集可用线路...")
                     } else {
                         sourceOptions.forEach { option ->
@@ -468,7 +465,271 @@ fun PlayerScreen(
 }
 
 @Composable
+fun LivePlayerScreen(
+    url: String,
+    title: String,
+    group: String,
+    format: String,
+    viewModel: LivePlayerViewModel = hiltViewModel()
+) {
+    @Suppress("UNUSED_VARIABLE")
+    val unusedRouteArgs = url to group
+    val context = LocalContext.current
+    val activity = context as? Activity
+
+    val isPlaying by viewModel.isPlaying.collectAsState()
+    val currentPosition by viewModel.currentPosition.collectAsState()
+    val duration by viewModel.duration.collectAsState()
+    val activeLiveUrl by viewModel.activeLiveUrl.collectAsState()
+    val playbackUiState by viewModel.playbackUiState.collectAsState()
+
+    var showCastDialog by remember { mutableStateOf(false) }
+    var showControls by remember { mutableStateOf(false) }
+    var isFullscreen by remember { mutableStateOf(false) }
+    var brightnessOverlay by remember { mutableStateOf<Float?>(null) }
+    var volumeOverlay by remember { mutableStateOf<Int?>(null) }
+
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            if (isFullscreen) {
+                exitFullscreen(activity)
+            }
+        }
+    }
+
+    DisposableEffect(isFullscreen) {
+        if (isFullscreen) {
+            enterFullscreen(activity)
+        } else {
+            exitFullscreen(activity)
+        }
+        onDispose { }
+    }
+
+    val playerViewFactory: @Composable () -> Unit = {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    useController = false
+                }
+            },
+            update = { playerView ->
+                playerView.player = viewModel.getPlayer()
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+
+    CinemaBackground(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            PlayerHeader(
+                eyebrow = "IPTV LIVE",
+                title = "直播播放",
+                onCastClick = { showCastDialog = true }
+            )
+
+            PlayerSurface(
+                isFullscreen = false,
+                showControls = showControls,
+                isPlaying = isPlaying,
+                currentPosition = currentPosition,
+                duration = duration,
+                playbackUiState = playbackUiState,
+                recoveringBadge = "直播缓冲",
+                recoveringTitle = "正在连接直播流",
+                brightnessOverlay = brightnessOverlay,
+                volumeOverlay = volumeOverlay,
+                maxVolume = maxVolume,
+                onToggleControls = { showControls = !showControls },
+                onTogglePlay = viewModel::togglePlayPause,
+                onRetryPlayback = viewModel::retryPlayback,
+                onSeekTo = viewModel::seekTo,
+                onToggleFullscreen = {
+                    showControls = true
+                    isFullscreen = true
+                },
+                onExitFullscreen = { isFullscreen = false },
+                onBrightnessChange = { brightnessOverlay = it },
+                onVolumeChange = { volumeOverlay = it },
+                onGestureEnd = {
+                    brightnessOverlay = null
+                    volumeOverlay = null
+                },
+                audioManager = audioManager,
+                activity = activity,
+                context = context,
+                playerViewFactory = playerViewFactory
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = livePlayerStatusTitle(
+                            title = title,
+                            isPlaying = isPlaying,
+                            playbackUiState = playbackUiState
+                        ),
+                        color = AppColors.TextPrimary,
+                        fontSize = 29.sp,
+                        lineHeight = 33.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Serif
+                    )
+                    Text(
+                        text = livePlayerSubtitle(
+                            group = group,
+                            format = format,
+                            liveUrl = activeLiveUrl,
+                            playbackUiState = playbackUiState
+                        ),
+                        color = AppColors.TextSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp
+                    )
+                }
+
+                LinearProgressIndicator(
+                    progress = { if (duration > 0) currentPosition.toFloat() / duration else 0f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(999.dp)),
+                    color = AppColors.Primary,
+                    trackColor = Color.White.copy(alpha = 0.12f)
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PlayerMetaPill("直播")
+                    PlayerMetaPill(playerSourceLabel(activeLiveUrl))
+                    PlayerMetaPill(format.ifBlank { "IPTV" })
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        onClick = {
+                            if (playbackUiState.isFailed) {
+                                viewModel.retryPlayback()
+                            } else {
+                                viewModel.togglePlayPause()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        color = AppColors.SurfaceAlt,
+                        contentColor = AppColors.TextPrimary,
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, AppColors.Divider)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 11.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = AppColors.Primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = when {
+                                    playbackUiState.isFailed -> "重试直播"
+                                    isPlaying -> "暂停"
+                                    else -> "播放"
+                                },
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    PlayerUtilityButton(
+                        icon = Icons.Default.Fullscreen,
+                        label = null,
+                        onClick = {
+                            showControls = true
+                            isFullscreen = true
+                        },
+                        modifier = Modifier.width(48.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    if (isFullscreen) {
+        Dialog(
+            onDismissRequest = { isFullscreen = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            PlayerSurface(
+                isFullscreen = true,
+                showControls = showControls,
+                isPlaying = isPlaying,
+                currentPosition = currentPosition,
+                duration = duration,
+                playbackUiState = playbackUiState,
+                recoveringBadge = "直播缓冲",
+                recoveringTitle = "正在连接直播流",
+                brightnessOverlay = brightnessOverlay,
+                volumeOverlay = volumeOverlay,
+                maxVolume = maxVolume,
+                onToggleControls = { showControls = !showControls },
+                onTogglePlay = viewModel::togglePlayPause,
+                onRetryPlayback = viewModel::retryPlayback,
+                onSeekTo = viewModel::seekTo,
+                onToggleFullscreen = { isFullscreen = false },
+                onExitFullscreen = { isFullscreen = false },
+                onBrightnessChange = { brightnessOverlay = it },
+                onVolumeChange = { volumeOverlay = it },
+                onGestureEnd = {
+                    brightnessOverlay = null
+                    volumeOverlay = null
+                },
+                audioManager = audioManager,
+                activity = activity,
+                context = context,
+                playerViewFactory = playerViewFactory
+            )
+        }
+    }
+
+    if (showCastDialog) {
+        AlertDialog(
+            onDismissRequest = { showCastDialog = false },
+            containerColor = AppColors.Surface,
+            titleContentColor = AppColors.TextPrimary,
+            textContentColor = AppColors.TextSecondary,
+            title = { Text("投屏") },
+            text = { Text("当前未发现可用投屏设备，请确认电视或盒子与手机在同一网络。") },
+            confirmButton = {
+                TextButton(onClick = { showCastDialog = false }) {
+                    Text("知道了")
+                }
+            }
+        )
+    }
+}
+
+@Composable
 private fun PlayerHeader(
+    eyebrow: String,
+    title: String,
     onCastClick: () -> Unit
 ) {
     Row(
@@ -480,14 +741,14 @@ private fun PlayerHeader(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
-                text = "NOW PLAYING",
+                text = eyebrow,
                 color = AppColors.Primary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 1.4.sp
             )
             Text(
-                text = "沉浸播放",
+                text = title,
                 color = AppColors.TextPrimary,
                 fontSize = 31.sp,
                 lineHeight = 34.sp,
@@ -514,6 +775,8 @@ private fun PlayerSurface(
     currentPosition: Long,
     duration: Long,
     playbackUiState: PlaybackUiState,
+    recoveringBadge: String = "正在切线",
+    recoveringTitle: String = "正在切换备用线路",
     brightnessOverlay: Float?,
     volumeOverlay: Int?,
     maxVolume: Int,
@@ -594,7 +857,7 @@ private fun PlayerSurface(
             Text(
                 text = when {
                     playbackUiState.isFailed -> "线路失效"
-                    playbackUiState.isRecovering -> "正在切线"
+                    playbackUiState.isRecovering -> recoveringBadge
                     else -> "正在播放"
                 },
                 modifier = Modifier
@@ -626,6 +889,7 @@ private fun PlayerSurface(
         if (!showControls && (playbackUiState.isRecovering || playbackUiState.isFailed)) {
             PlaybackStatusOverlay(
                 state = playbackUiState,
+                recoveringTitle = recoveringTitle,
                 onRetryPlayback = onRetryPlayback
             )
         }
@@ -739,6 +1003,7 @@ private fun PlayerSurface(
 @Composable
 private fun androidx.compose.foundation.layout.BoxScope.PlaybackStatusOverlay(
     state: PlaybackUiState,
+    recoveringTitle: String,
     onRetryPlayback: () -> Unit
 ) {
     Surface(
@@ -762,7 +1027,7 @@ private fun androidx.compose.foundation.layout.BoxScope.PlaybackStatusOverlay(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
-                text = if (state.isFailed) "线路不可用" else "正在切换备用线路",
+                text = if (state.isFailed) "线路不可用" else recoveringTitle,
                 color = if (state.isFailed) AppColors.Accent else AppColors.Primary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Black
@@ -908,8 +1173,7 @@ private fun formatTime(ms: Long): String {
     }
 }
 
-private fun playerStatusTitle(
-    vodId: String,
+private fun episodePlayerStatusTitle(
     title: String,
     episodeLabel: String,
     isPlaying: Boolean,
@@ -919,12 +1183,10 @@ private fun playerStatusTitle(
 ): String {
     if (playbackUiState.isFailed) {
         return when {
-            vodId == "live" -> "直播频道 · 线路不可用"
             title.isNotBlank() -> "$title · 线路不可用"
             else -> "线路不可用"
         }
     }
-    if (vodId == "live") return "直播频道 · ${if (isPlaying) "正在播放" else "待播放"}"
     if (title.isNotBlank()) {
         return if (episodeLabel.isNotBlank()) "$title · $episodeLabel" else title
     }
@@ -937,20 +1199,12 @@ private fun playerStatusTitle(
     return "暗线追踪 · $fallbackLabel"
 }
 
-private fun playerSubtitle(
-    vodId: String,
+private fun episodePlayerSubtitle(
     episodeUrl: String,
     currentPosition: Long,
     duration: Long,
     playbackUiState: PlaybackUiState
 ): String {
-    if (vodId == "live") {
-        return if (playbackUiState.isRecovering || playbackUiState.isFailed) {
-            playbackUiState.message
-        } else {
-            "${playerSourceLabel(episodeUrl)} 线路已接入"
-        }
-    }
     if (playbackUiState.isRecovering || playbackUiState.isFailed) {
         return playbackUiState.message
     }
@@ -959,6 +1213,34 @@ private fun playerSubtitle(
     } else {
         "${playerSourceLabel(episodeUrl)} 线路准备中"
     }
+}
+
+private fun livePlayerStatusTitle(
+    title: String,
+    isPlaying: Boolean,
+    playbackUiState: PlaybackUiState
+): String {
+    val channelName = title.ifBlank { "直播频道" }
+    return when {
+        playbackUiState.isFailed -> "$channelName · 线路不可用"
+        isPlaying -> "$channelName · 直播中"
+        else -> "$channelName · 待播放"
+    }
+}
+
+private fun livePlayerSubtitle(
+    group: String,
+    format: String,
+    liveUrl: String,
+    playbackUiState: PlaybackUiState
+): String {
+    if (playbackUiState.isRecovering || playbackUiState.isFailed) {
+        return playbackUiState.message
+    }
+    val meta = listOf(group, format, playerSourceLabel(liveUrl))
+        .filter { it.isNotBlank() }
+        .joinToString(" · ")
+    return if (meta.isBlank()) "直播线路已接入" else "$meta · 直播线路已接入"
 }
 
 private fun playerSourceLabel(episodeUrl: String): String {

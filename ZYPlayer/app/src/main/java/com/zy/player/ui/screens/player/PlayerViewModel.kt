@@ -150,18 +150,6 @@ class PlayerViewModel @Inject constructor(
 
         override fun onPlayerError(error: PlaybackException) {
             Log.e(TAG, "onPlayerError - errorCode=${error.errorCode}, message=${error.message}", error)
-            if (vodId == "live") {
-                val sourceName = playbackCandidates.getOrNull(currentCandidateIndex)?.sourceName ?: "直播线路"
-                _isPlaying.value = false
-                stopProgressUpdates()
-                _playbackUiState.value = PlaybackUiState(
-                    sourceName = sourceName,
-                    message = "$sourceName 连接失败：${error.message ?: "网络不可达"}",
-                    isRecovering = false,
-                    isFailed = true
-                )
-                return
-            }
             recoverFromPlaybackError(error)
         }
     }
@@ -227,10 +215,6 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun loadSourceOptions() {
-        if (vodId == "live") {
-            publishSourceOptions()
-            return
-        }
         viewModelScope.launch {
             ensureFallbackCandidatesLoaded()
         }
@@ -243,7 +227,7 @@ class PlayerViewModel @Inject constructor(
             if (index >= 0) {
                 val candidate = playbackCandidates[index]
                 Log.d(TAG, "switchToSource - index=$index, source=${candidate.sourceName}")
-                if (index == currentCandidateIndex || vodId == "live" || isPlayableCandidate(candidate)) {
+                if (index == currentCandidateIndex || isPlayableCandidate(candidate)) {
                     playCandidate(index)
                 } else {
                     val currentSource = playbackCandidates.getOrNull(currentCandidateIndex)?.sourceName ?: "当前线路"
@@ -278,8 +262,7 @@ class PlayerViewModel @Inject constructor(
             isRecovering = true
         )
 
-        val playable = vodId == "live" || isPlayableCandidate(candidate)
-        if (playable) {
+        if (isPlayableCandidate(candidate)) {
             playCandidate(0)
             return
         }
@@ -570,5 +553,165 @@ class PlayerViewModel @Inject constructor(
             .split('.')
             .firstOrNull { it.length > 2 && it !in setOf("www", "vip", "vod") }
             ?: "当前线路"
+    }
+}
+
+@HiltViewModel
+class LivePlayerViewModel @Inject constructor(
+    private val playerManager: PlayerManager,
+    savedStateHandle: SavedStateHandle
+) : ViewModel() {
+
+    companion object {
+        private const val TAG = "LivePlayerViewModel"
+    }
+
+    private val liveUrl: String = savedStateHandle.get<String>("url") ?: ""
+    private val channelTitle: String = savedStateHandle.get<String>("title").orEmpty()
+
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    private val _currentPosition = MutableStateFlow(0L)
+    val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
+
+    private val _duration = MutableStateFlow(0L)
+    val duration: StateFlow<Long> = _duration.asStateFlow()
+
+    private val _activeLiveUrl = MutableStateFlow(liveUrl)
+    val activeLiveUrl: StateFlow<String> = _activeLiveUrl.asStateFlow()
+
+    private val _playbackUiState = MutableStateFlow(
+        PlaybackUiState(
+            sourceName = "IPTV直播",
+            message = "正在连接直播流",
+            isRecovering = true
+        )
+    )
+    val playbackUiState: StateFlow<PlaybackUiState> = _playbackUiState.asStateFlow()
+
+    private var progressUpdateJob: Job? = null
+
+    private val playerListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            Log.d(TAG, "onIsPlayingChanged - isPlaying=$isPlaying")
+            _isPlaying.value = isPlaying
+            if (isPlaying) {
+                startProgressUpdates()
+            } else {
+                stopProgressUpdates()
+            }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            val sourceName = channelTitle.ifBlank { "IPTV直播" }
+            when (playbackState) {
+                Player.STATE_BUFFERING -> {
+                    _playbackUiState.value = PlaybackUiState(
+                        sourceName = sourceName,
+                        message = "$sourceName 正在缓冲",
+                        isRecovering = true
+                    )
+                }
+                Player.STATE_READY -> {
+                    _duration.value = playerManager.getDuration().coerceAtLeast(0L)
+                    _playbackUiState.value = PlaybackUiState(
+                        sourceName = sourceName,
+                        message = "$sourceName 已接入直播流",
+                        isRecovering = false
+                    )
+                }
+                Player.STATE_ENDED -> {
+                    _playbackUiState.value = PlaybackUiState(
+                        sourceName = sourceName,
+                        message = "$sourceName 直播已结束或中断",
+                        isRecovering = false,
+                        isFailed = true
+                    )
+                }
+            }
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            val sourceName = channelTitle.ifBlank { "IPTV直播" }
+            Log.e(TAG, "onPlayerError - errorCode=${error.errorCode}, message=${error.message}", error)
+            _isPlaying.value = false
+            stopProgressUpdates()
+            _playbackUiState.value = PlaybackUiState(
+                sourceName = sourceName,
+                message = "$sourceName 连接失败：${error.message ?: "网络不可达"}",
+                isRecovering = false,
+                isFailed = true
+            )
+        }
+    }
+
+    init {
+        Log.d(TAG, "init - liveUrl=$liveUrl")
+        playerManager.addListener(playerListener)
+        if (liveUrl.isNotBlank()) {
+            playLive()
+        } else {
+            _playbackUiState.value = PlaybackUiState(
+                sourceName = "IPTV直播",
+                message = "没有可播放的直播地址",
+                isRecovering = false,
+                isFailed = true
+            )
+        }
+    }
+
+    fun getPlayer() = playerManager.getPlayer()
+
+    fun togglePlayPause() {
+        if (_isPlaying.value) {
+            playerManager.pause()
+        } else {
+            playerManager.resume()
+        }
+    }
+
+    fun seekTo(positionMs: Long) {
+        if (_duration.value <= 0L) return
+        playerManager.seekTo(positionMs)
+        _currentPosition.value = positionMs
+    }
+
+    fun retryPlayback() {
+        playLive()
+    }
+
+    private fun playLive() {
+        if (liveUrl.isBlank()) return
+        _activeLiveUrl.value = liveUrl
+        _currentPosition.value = 0L
+        _duration.value = 0L
+        _playbackUiState.value = PlaybackUiState(
+            sourceName = channelTitle.ifBlank { "IPTV直播" },
+            message = "正在连接直播流",
+            isRecovering = true
+        )
+        playerManager.play(liveUrl)
+    }
+
+    private fun startProgressUpdates() {
+        progressUpdateJob?.cancel()
+        progressUpdateJob = viewModelScope.launch {
+            while (isActive) {
+                _currentPosition.value = playerManager.getCurrentPosition()
+                delay(500)
+            }
+        }
+    }
+
+    private fun stopProgressUpdates() {
+        progressUpdateJob?.cancel()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        Log.d(TAG, "onCleared - Cleaning up")
+        stopProgressUpdates()
+        playerManager.removeListener(playerListener)
     }
 }

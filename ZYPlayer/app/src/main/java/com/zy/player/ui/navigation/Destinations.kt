@@ -10,8 +10,8 @@ object Destinations {
     const val SEARCH_RESULT = "search_result/{keyword}"
     const val DETAIL = "detail/{siteId}/{vodId}"
     const val EPISODES = "episodes/{siteId}/{vodId}"
-    const val PLAYER = "player/{siteId}/{vodId}/{episodeUrl}?title={title}&episodeLabel={episodeLabel}"
-    const val PLAYER_PREVIEW = "player_preview"
+    const val EPISODE_PLAYER = "episode_player/{siteId}/{vodId}/{episodeUrl}?title={title}&episodeLabel={episodeLabel}"
+    const val LIVE_PLAYER = "live_player/{url}?title={title}&group={group}&format={format}"
     const val HISTORY = "history"
     const val SITE_MANAGEMENT = "site_management"
     const val LIVE_SOURCE_MANAGEMENT = "live_source_management"
@@ -19,7 +19,7 @@ object Destinations {
     fun searchResult(keyword: String) = "search_result/${Uri.encode(keyword)}"
     fun detail(siteId: Long, vodId: String) = "detail/$siteId/$vodId"
     fun episodes(siteId: Long, vodId: String) = "episodes/$siteId/$vodId"
-    fun player(
+    fun episodePlayer(
         siteId: Long,
         vodId: String,
         episodeUrl: String,
@@ -29,6 +29,19 @@ object Destinations {
         val encodedUrl = Uri.encode(episodeUrl)
         val encodedTitle = Uri.encode(title)
         val encodedEpisodeLabel = Uri.encode(episodeLabel)
-        return "player/$siteId/$vodId/$encodedUrl?title=$encodedTitle&episodeLabel=$encodedEpisodeLabel"
+        return "episode_player/$siteId/$vodId/$encodedUrl?title=$encodedTitle&episodeLabel=$encodedEpisodeLabel"
+    }
+
+    fun livePlayer(
+        url: String,
+        title: String = "",
+        group: String = "",
+        format: String = ""
+    ): String {
+        val encodedUrl = Uri.encode(url)
+        val encodedTitle = Uri.encode(title)
+        val encodedGroup = Uri.encode(group)
+        val encodedFormat = Uri.encode(format)
+        return "live_player/$encodedUrl?title=$encodedTitle&group=$encodedGroup&format=$encodedFormat"
     }
 }
