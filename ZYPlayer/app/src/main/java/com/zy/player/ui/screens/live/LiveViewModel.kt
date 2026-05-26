@@ -79,6 +79,13 @@ class LiveViewModel @Inject constructor(
         applyFilters()
     }
 
+    fun showAllChannels() {
+        if (_searchQuery.value.isBlank() && _selectedGroup.value == null) return
+        _searchQuery.value = ""
+        _selectedGroup.value = null
+        applyFilters()
+    }
+
     fun selectGroup(group: String?) {
         _selectedGroup.value = group
         applyFilters()

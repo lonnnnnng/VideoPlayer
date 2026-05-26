@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -189,7 +190,8 @@ fun CinemaSearchInput(
     placeholder: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    horizontalPadding: Dp = 18.dp
+    horizontalPadding: Dp = 18.dp,
+    trailingContent: @Composable RowScope.() -> Unit = {}
 ) {
     val focusRequester = remember { FocusRequester() }
 
@@ -202,7 +204,7 @@ fun CinemaSearchInput(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier
-                .fillMaxWidth()
+                .weight(1f)
                 .focusRequester(focusRequester),
             singleLine = true,
             textStyle = TextStyle(
@@ -231,6 +233,7 @@ fun CinemaSearchInput(
                 }
             }
         )
+        trailingContent()
     }
 }
 
@@ -239,7 +242,7 @@ private fun CinemaSearchSurface(
     modifier: Modifier = Modifier,
     horizontalPadding: Dp = 18.dp,
     onClick: (() -> Unit)? = null,
-    content: @Composable () -> Unit
+    content: @Composable RowScope.() -> Unit
 ) {
     Row(
         modifier = modifier

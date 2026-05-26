@@ -28,6 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,6 +66,10 @@ fun LiveScreen(
     val groups = remember(uiState) { viewModel.getGroups() }
     val currentSourceName = sources.firstOrNull { it.id == currentSourceId }?.name ?: "选择直播源"
 
+    LaunchedEffect(Unit) {
+        viewModel.showAllChannels()
+    }
+
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -83,6 +88,7 @@ fun LiveScreen(
                     selected = selectedGroup,
                     currentSourceName = currentSourceName,
                     onSourceClick = { showSourceSelector = true },
+                    onAllClick = viewModel::showAllChannels,
                     onClick = { group -> viewModel.selectGroup(if (group == selectedGroup) null else group) }
                 )
             }
@@ -178,7 +184,8 @@ private fun LiveSourceChip(
         color = AppColors.PrimaryLight,
         contentColor = AppColors.Primary,
         shape = RoundedCornerShape(999.dp),
-        border = BorderStroke(1.dp, AppColors.Primary.copy(alpha = 0.34f))
+        border = BorderStroke(1.dp, AppColors.Primary.copy(alpha = 0.34f)),
+        modifier = Modifier.width(68.dp)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -207,37 +214,64 @@ private fun SourceTabs(
     selected: String?,
     currentSourceName: String,
     onSourceClick: () -> Unit,
+    onAllClick: () -> Unit,
     onClick: (String) -> Unit
 ) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 18.dp),
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp)
+            .padding(bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.padding(bottom = 6.dp)
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        item {
-            LiveSourceChip(
-                sourceName = currentSourceName,
-                onClick = onSourceClick
-            )
-        }
-        items(labels.take(10)) { label ->
-            val active = label == selected || (selected == null && label == labels.first())
-            Surface(
-                onClick = { onClick(label) },
-                color = if (active) AppColors.Primary else Color.White.copy(alpha = 0.04f),
-                contentColor = if (active) AppColors.Background else AppColors.TextSecondary,
-                shape = RoundedCornerShape(999.dp),
-                border = if (active) null else BorderStroke(1.dp, AppColors.Divider)
-            ) {
-                Text(
-                    text = label,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
+        LiveSourceChip(
+            sourceName = currentSourceName,
+            onClick = onSourceClick
+        )
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            item {
+                SourceTabChip(
+                    label = "全部",
+                    active = selected == null,
+                    onClick = onAllClick
+                )
+            }
+            items(labels.take(10)) { label ->
+                SourceTabChip(
+                    label = label,
+                    active = label == selected,
+                    onClick = { onClick(label) }
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SourceTabChip(
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = if (active) AppColors.Primary else Color.White.copy(alpha = 0.04f),
+        contentColor = if (active) AppColors.Background else AppColors.TextSecondary,
+        shape = RoundedCornerShape(999.dp),
+        border = if (active) null else BorderStroke(1.dp, AppColors.Divider)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
     }
 }
 
