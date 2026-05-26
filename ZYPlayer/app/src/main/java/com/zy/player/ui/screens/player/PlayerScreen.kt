@@ -210,34 +210,17 @@ fun EpisodePlayerScreen(
                         .padding(horizontal = 18.dp, vertical = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = episodePlayerStatusTitle(
-                                title = title,
-                                episodeLabel = episodeLabel,
-                                isPlaying = isPlaying,
-                                duration = duration,
-                                currentPosition = currentPosition,
-                                playbackUiState = playbackUiState
-                            ),
-                            color = AppColors.TextPrimary,
-                            fontSize = 29.sp,
-                            lineHeight = 33.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Serif
-                        )
-                        Text(
-                            text = episodePlayerSubtitle(
-                                episodeUrl = activeEpisodeUrl,
-                                currentPosition = currentPosition,
-                                duration = duration,
-                                playbackUiState = playbackUiState
-                            ),
-                            color = AppColors.TextSecondary,
-                            fontSize = 13.sp,
-                            lineHeight = 20.sp
-                        )
-                    }
+                    Text(
+                        text = episodePlayerSubtitle(
+                            episodeUrl = activeEpisodeUrl,
+                            currentPosition = currentPosition,
+                            duration = duration,
+                            playbackUiState = playbackUiState
+                        ),
+                        color = AppColors.TextSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp
+                    )
 
                     LinearProgressIndicator(
                         progress = {
@@ -273,7 +256,7 @@ fun EpisodePlayerScreen(
                             label = "快退",
                             onClick = seekBackward,
                             modifier = Modifier
-                                .width(78.dp)
+                                .weight(1f)
                                 .height(44.dp),
                             shape = RoundedCornerShape(13.dp)
                         )
@@ -328,7 +311,7 @@ fun EpisodePlayerScreen(
                             label = "快进",
                             onClick = seekForward,
                             modifier = Modifier
-                                .width(78.dp)
+                                .weight(1f)
                                 .height(44.dp),
                             shape = RoundedCornerShape(13.dp)
                         )
@@ -1440,7 +1423,12 @@ private fun formatTime(ms: Long): String {
 }
 
 private fun episodeTopBarTitle(title: String, episodeLabel: String): String {
-    return title.ifBlank { episodeLabel.ifBlank { "剧集播放" } }
+    return when {
+        title.isNotBlank() && episodeLabel.isNotBlank() -> "$title · $episodeLabel"
+        title.isNotBlank() -> title
+        episodeLabel.isNotBlank() -> episodeLabel
+        else -> "剧集播放"
+    }
 }
 
 private fun quickSeekPosition(currentPosition: Long, duration: Long, delta: Long): Long {
@@ -1450,32 +1438,6 @@ private fun quickSeekPosition(currentPosition: Long, duration: Long, delta: Long
     } else {
         target.coerceAtLeast(0L)
     }
-}
-
-private fun episodePlayerStatusTitle(
-    title: String,
-    episodeLabel: String,
-    isPlaying: Boolean,
-    duration: Long,
-    currentPosition: Long,
-    playbackUiState: PlaybackUiState
-): String {
-    if (playbackUiState.isFailed) {
-        return when {
-            title.isNotBlank() -> "$title · 线路不可用"
-            else -> "线路不可用"
-        }
-    }
-    if (title.isNotBlank()) {
-        return if (episodeLabel.isNotBlank()) "$title · $episodeLabel" else title
-    }
-    val fallbackLabel = when {
-        duration <= 0L && currentPosition <= 0L -> "准备播放"
-        isPlaying -> "正在播放"
-        currentPosition > 0L -> "已暂停"
-        else -> "待播放"
-    }
-    return "暗线追踪 · $fallbackLabel"
 }
 
 private fun episodePlayerSubtitle(
