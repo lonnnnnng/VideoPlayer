@@ -3,13 +3,16 @@ package com.zy.player.player
 import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.OkHttpClient
+import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,6 +23,39 @@ class PlayerManager @Inject constructor(
 ) {
     private var exoPlayer: ExoPlayer? = null
     private var currentListener: Player.Listener? = null
+    private val transferByteListeners = CopyOnWriteArraySet<(Int) -> Unit>()
+
+    private val transferListener = object : TransferListener {
+        override fun onTransferInitializing(
+            source: DataSource,
+            dataSpec: DataSpec,
+            isNetwork: Boolean
+        ) = Unit
+
+        override fun onTransferStart(
+            source: DataSource,
+            dataSpec: DataSpec,
+            isNetwork: Boolean
+        ) = Unit
+
+        override fun onBytesTransferred(
+            source: DataSource,
+            dataSpec: DataSpec,
+            isNetwork: Boolean,
+            bytesTransferred: Int
+        ) {
+            if (!isNetwork || bytesTransferred <= 0) return
+            transferByteListeners.forEach { listener ->
+                listener(bytesTransferred)
+            }
+        }
+
+        override fun onTransferEnd(
+            source: DataSource,
+            dataSpec: DataSpec,
+            isNetwork: Boolean
+        ) = Unit
+    }
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -35,6 +71,7 @@ class PlayerManager @Inject constructor(
                 .setDefaultRequestProperties(mapOf(
                     "Referer" to "https://www.baidu.com/"
                 ))
+                .setTransferListener(transferListener)
 
             val mediaSourceFactory = DefaultMediaSourceFactory(context)
                 .setDataSourceFactory(dataSourceFactory)
@@ -104,10 +141,19 @@ class PlayerManager @Inject constructor(
         exoPlayer?.removeAnalyticsListener(listener)
     }
 
+    fun addTransferByteListener(listener: (Int) -> Unit) {
+        transferByteListeners += listener
+    }
+
+    fun removeTransferByteListener(listener: (Int) -> Unit) {
+        transferByteListeners -= listener
+    }
+
     fun release() {
         currentListener?.let { exoPlayer?.removeListener(it) }
         exoPlayer?.release()
         exoPlayer = null
         currentListener = null
+        transferByteListeners.clear()
     }
 }

@@ -1287,7 +1287,7 @@ private fun PlaybackStatsRow(stats: PlaybackStats) {
         )
         PlayerStatsCell(
             label = "网速",
-            value = formatBitrate(stats.networkSpeedBitsPerSecond),
+            value = formatTransferSpeed(stats.networkSpeedBitsPerSecond),
             modifier = Modifier.weight(1f)
         )
     }
@@ -1511,6 +1511,21 @@ private fun formatBitrate(bitsPerSecond: Long): String {
         }
     } else {
         "${(bitsPerSecond / 1_000L).coerceAtLeast(1L)} Kbps"
+    }
+}
+
+private fun formatTransferSpeed(bitsPerSecond: Long): String {
+    if (bitsPerSecond <= 0L) return "待获取"
+    val bytesPerSecond = bitsPerSecond / 8f
+    return if (bytesPerSecond >= 1_048_576f) {
+        val mbps = bytesPerSecond / 1_048_576f
+        if (mbps >= 10f) {
+            String.format("%.0f MB/s", mbps)
+        } else {
+            String.format("%.1f MB/s", mbps)
+        }
+    } else {
+        "${(bytesPerSecond / 1024f).toLong().coerceAtLeast(1L)} KB/s"
     }
 }
 
