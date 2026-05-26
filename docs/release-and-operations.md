@@ -39,6 +39,13 @@ cd ZYPlayer
 ./gradlew assembleDebug --stacktrace
 ```
 
+本地验证正式签名 release APK 时，需要先加载本机签名环境：
+
+```bash
+source "$HOME/.android/zyplayer-release-signing.env"
+VERSION_NAME=1.0.3 VERSION_CODE=1000003 ./gradlew assembleRelease --stacktrace
+```
+
 2. 提交并推送代码。
 
 ```bash
@@ -69,32 +76,41 @@ gh release view v1.0.3 --repo lonnnnnng/VideoPlayer
 
 ## APK 签名
 
-当前工作流构建 debug APK。为了让 debug APK 能覆盖安装已有 debug 包，CI 和本地必须使用同一个 debug 签名。
+当前发布产物是正式 release 签名 APK。推送 `v*` 标签时，GitHub Actions 会恢复 release keystore，执行 `assembleRelease`，并将正式签名的 APK 上传到 GitHub Release。
 
-当前 GitHub Actions Secret：
+当前本机 keystore 路径：
 
 ```text
-ANDROID_DEBUG_KEYSTORE_BASE64
+$HOME/.android/zyplayer-release.jks
 ```
 
-工作流会将它还原到：
+当前本机签名环境文件：
 
 ```text
-$HOME/.android/debug.keystore
+$HOME/.android/zyplayer-release-signing.env
 ```
 
-并设置：
+当前 GitHub Actions Secrets：
 
 ```text
-ANDROID_DEBUG_KEYSTORE_PATH=$HOME/.android/debug.keystore
+ANDROID_RELEASE_KEYSTORE_BASE64
+ANDROID_RELEASE_KEYSTORE_PASSWORD
+ANDROID_RELEASE_KEY_ALIAS
+ANDROID_RELEASE_KEY_PASSWORD
 ```
 
-Gradle 在该变量存在时使用该 keystore 签名 debug APK。
-
-`v1.0.2` 已验证签名 SHA-256：
+工作流会将 keystore 还原到：
 
 ```text
-6c8823ff4295d7b29e8e2c58b13c864f795b082255b67c80aa8cb783155e3899
+$HOME/.android/zyplayer-release.jks
+```
+
+并设置 `ANDROID_RELEASE_KEYSTORE_PATH`、`ANDROID_RELEASE_KEYSTORE_PASSWORD`、`ANDROID_RELEASE_KEY_ALIAS`、`ANDROID_RELEASE_KEY_PASSWORD` 供 Gradle 签名使用。
+
+当前正式签名 SHA-256：
+
+```text
+DA:E0:66:81:96:2F:74:7C:F0:5B:0C:67:54:5D:64:D5:C2:8B:6A:15:D1:28:F6:3A:5E:B7:42:60:75:04:F9:8B
 ```
 
 ## Release APK 验证

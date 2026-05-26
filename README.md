@@ -139,11 +139,11 @@ GitHub Actions 工作流：
 工作流能力：
 
 - `main` 分支推送、PR、手动触发、`v*` 标签均可构建 APK。
-- 每次构建上传 debug APK artifact。
-- 推送 `v*` 标签时创建 GitHub Release，并上传 `ZYPlayer-<tag>.apk`。
+- `main` 分支、PR 和手动触发构建 debug APK artifact。
+- 推送 `v*` 标签时创建 GitHub Release，并上传正式 release 签名的 `ZYPlayer-<tag>.apk`。
 - 根据 tag 派生版本号。例如 `v1.0.2` 会生成 `versionName=1.0.2`。
 - 根据 tag 派生版本码。例如 `v1.0.2` 会生成 `versionCode=1000002`。
-- 支持通过 `ANDROID_DEBUG_KEYSTORE_BASE64` Secret 固定 debug 签名，保证 Release APK 能覆盖安装本机 debug 包。
+- 支持通过 `ANDROID_RELEASE_KEYSTORE_BASE64` 等 Secrets 固定正式签名，保证后续版本可以覆盖安装。
 
 发布新版本：
 

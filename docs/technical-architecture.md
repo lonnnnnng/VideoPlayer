@@ -190,9 +190,9 @@ CI 会通过环境变量覆盖版本：
 能力：
 
 - `main`、PR、手动触发、`v*` 标签均可构建。
-- 每次构建上传 APK artifact。
-- 标签构建创建 GitHub Release。
-- 支持从 `ANDROID_DEBUG_KEYSTORE_BASE64` 恢复固定 debug 签名。
+- `main`、PR、手动触发构建 debug APK artifact。
+- 标签构建恢复正式 release keystore，执行 `assembleRelease`，创建 GitHub Release。
+- 支持从 `ANDROID_RELEASE_KEYSTORE_BASE64` 等 Secrets 恢复固定正式签名。
 - 输出 APK 签名证书 SHA，便于排查覆盖安装问题。
 
 ## 技术决策
@@ -205,6 +205,5 @@ CI 会通过环境变量覆盖版本：
 
 ## 已知技术债
 
-- 当前 CI 产物是 debug APK。正式分发建议配置 release buildType 和专用 release 签名。
 - GitHub Actions 当前提示 Node.js 20 actions 将弃用，后续需要升级相关 action 版本。
 - 第三方源返回格式不稳定，解析逻辑后续需要继续增强。

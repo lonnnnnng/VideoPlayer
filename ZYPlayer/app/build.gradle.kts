@@ -12,6 +12,10 @@ android {
     val ciVersionName = System.getenv("VERSION_NAME")?.takeIf { it.isNotBlank() }
     val ciVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull()
     val ciDebugKeystorePath = System.getenv("ANDROID_DEBUG_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+    val releaseKeystorePath = System.getenv("ANDROID_RELEASE_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+    val releaseKeystorePassword = System.getenv("ANDROID_RELEASE_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+    val releaseKeyAlias = System.getenv("ANDROID_RELEASE_KEY_ALIAS")?.takeIf { it.isNotBlank() }
+    val releaseKeyPassword = System.getenv("ANDROID_RELEASE_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
 
     defaultConfig {
         applicationId = "com.zy.player"
@@ -35,6 +39,20 @@ android {
                 keyPassword = "android"
             }
         }
+
+        if (
+            releaseKeystorePath != null &&
+            releaseKeystorePassword != null &&
+            releaseKeyAlias != null &&
+            releaseKeyPassword != null
+        ) {
+            create("release") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -46,6 +64,9 @@ android {
 
         release {
             isMinifyEnabled = false
+            signingConfigs.findByName("release")?.let {
+                signingConfig = it
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

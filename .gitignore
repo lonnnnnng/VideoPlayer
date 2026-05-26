@@ -23,3 +23,5 @@ captures/
 # Packaged artifacts
 *.apk
 *.aab
+*.jks
+*.keystore
