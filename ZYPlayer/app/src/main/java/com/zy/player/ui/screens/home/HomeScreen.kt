@@ -15,18 +15,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,7 +50,7 @@ import com.zy.player.ui.components.CinemaSearchPill
 import com.zy.player.ui.components.NetworkImage
 import com.zy.player.ui.theme.AppColors
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToSearch: () -> Unit,
@@ -55,71 +59,148 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val currentSiteId by viewModel.currentSiteId.collectAsState()
-    val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
+    val successState = uiState as? HomeUiState.Success
+    val shouldLoadMore by remember(uiState) {
+        derivedStateOf {
+            val state = uiState as? HomeUiState.Success ?: return@derivedStateOf false
+            val layoutInfo = listState.layoutInfo
+            val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
+
+            state.hasMore &&
+                !state.isRefreshing &&
+                !state.isLoadingMore &&
+                layoutInfo.totalItemsCount > 0 &&
+                lastVisibleIndex >= layoutInfo.totalItemsCount - 3
+        }
+    }
+
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore) {
+            viewModel.loadMore()
+        }
+    }
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
+        PullToRefreshBox(
+            isRefreshing = successState?.isRefreshing == true,
+            onRefresh = viewModel::refresh,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 18.dp)
         ) {
-            stickyHeader {
-                HomeStickyHeader(
-                    meta = when (val success = uiState as? HomeUiState.Success) {
-                        null -> "片库同步中"
-                        else -> "全部 ${success.vodList.size}"
-                    },
-                    onSearchClick = onNavigateToSearch
-                )
-            }
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                stickyHeader {
+                    HomeStickyHeader(
+                        meta = when (val success = uiState as? HomeUiState.Success) {
+                            null -> "片库同步中"
+                            else -> "全部 ${success.vodList.size}"
+                        },
+                        onSearchClick = onNavigateToSearch
+                    )
+                }
 
-            item {
                 when (val state = uiState) {
-                    is HomeUiState.Loading -> CinemaLoading()
-                    is HomeUiState.Error -> CinemaMessage(
-                        title = "片库连接失败",
-                        message = state.message,
-                        actionText = "重试",
-                        onAction = viewModel::refresh
-                    )
-                    is HomeUiState.Empty -> CinemaMessage(
-                        title = "暂无影片",
-                        message = "当前分类没有返回内容，试试切换资源站或分类。"
-                    )
+                    is HomeUiState.Loading -> {
+                        item { CinemaLoading() }
+                    }
+                    is HomeUiState.Error -> {
+                        item {
+                            CinemaMessage(
+                                title = "片库连接失败",
+                                message = state.message,
+                                actionText = "重试",
+                                onAction = viewModel::refresh
+                            )
+                        }
+                    }
+                    is HomeUiState.Empty -> {
+                        item {
+                            CinemaMessage(
+                                title = "暂无影片",
+                                message = "当前分类没有返回内容，试试切换资源站或分类。"
+                            )
+                        }
+                    }
                     is HomeUiState.Success -> {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(3),
-                            state = gridState,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(((state.vodList.size.coerceAtMost(18) + 2) / 3 * 202).dp),
-                            contentPadding = PaddingValues(horizontal = 18.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                            userScrollEnabled = false
-                        ) {
-                            items(state.vodList.take(18)) { vod ->
-                                CinemaVodPoster(
-                                    vod = vod,
-                                    onClick = {
-                                        currentSiteId?.let { siteId ->
-                                            onNavigateToDetail(siteId, vod.vod_id.toString())
-                                        }
-                                    }
+                        items(
+                            items = state.vodList.chunked(3),
+                            key = { row -> row.joinToString(separator = "-") { it.vod_id.toString() } }
+                        ) { row ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 18.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                row.forEach { vod ->
+                                    CinemaVodPoster(
+                                        vod = vod,
+                                        onClick = {
+                                            currentSiteId?.let { siteId ->
+                                                onNavigateToDetail(siteId, vod.vod_id.toString())
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                repeat(3 - row.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+
+                        if (state.isLoadingMore) {
+                            item {
+                                HomeLoadMoreFooter(
+                                    text = "正在加载更多",
+                                    showProgress = true
                                 )
                             }
-
-                            if (state.hasMore) {
-                                item {
-                                    LaunchedEffect(Unit) {
-                                        viewModel.loadVodList(isRefresh = false)
-                                    }
-                                }
+                        } else if (!state.hasMore && state.vodList.isNotEmpty()) {
+                            item {
+                                HomeLoadMoreFooter(
+                                    text = "已经到底了",
+                                    showProgress = false
+                                )
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HomeLoadMoreFooter(
+    text: String,
+    showProgress: Boolean
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (showProgress) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                color = AppColors.Primary,
+                strokeWidth = 2.dp
+            )
+            Spacer(modifier = Modifier.padding(horizontal = 5.dp))
+        }
+        Text(
+            text = text,
+            color = AppColors.TextTertiary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
@@ -178,10 +259,11 @@ private fun HomeStickyHeader(
 @Composable
 private fun CinemaVodPoster(
     vod: VodItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
     ) {

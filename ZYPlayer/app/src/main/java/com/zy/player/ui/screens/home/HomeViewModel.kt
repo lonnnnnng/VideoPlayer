@@ -14,7 +14,9 @@ sealed class HomeUiState {
     object Loading : HomeUiState()
     data class Success(
         val vodList: List<VodItem>,
-        val hasMore: Boolean
+        val hasMore: Boolean,
+        val isRefreshing: Boolean = false,
+        val isLoadingMore: Boolean = false
     ) : HomeUiState()
     data class Error(val message: String) : HomeUiState()
     object Empty : HomeUiState()
@@ -40,6 +42,7 @@ class HomeViewModel @Inject constructor(
 
     private var currentPage = 1
     private var currentBaseUrl: String? = null
+    private var isLoadingVodList = false
 
     val sites = siteRepository.observeAllSites()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -93,41 +96,87 @@ class HomeViewModel @Inject constructor(
     }
 
     fun loadVodList(isRefresh: Boolean = false) {
-        if (isRefresh) {
-            currentPage = 1
+        val baseUrl = currentBaseUrl ?: return
+        val previousState = _uiState.value
+        val previousPage = currentPage
+        val pageToLoad = if (isRefresh) 1 else currentPage
+        val typeId = _selectedCategoryId.value?.takeIf { it != 0 }
+
+        if (isLoadingVodList) return
+        if (!isRefresh) {
+            val successState = previousState as? HomeUiState.Success ?: return
+            if (!successState.hasMore || successState.isLoadingMore || successState.isRefreshing) return
         }
 
+        isLoadingVodList = true
         viewModelScope.launch {
             if (isRefresh) {
-                _uiState.value = HomeUiState.Loading
+                currentPage = 1
+                _uiState.value = when (previousState) {
+                    is HomeUiState.Success -> previousState.copy(
+                        isRefreshing = true,
+                        isLoadingMore = false
+                    )
+                    else -> HomeUiState.Loading
+                }
+            } else {
+                val successState = previousState as? HomeUiState.Success
+                if (successState != null) {
+                    _uiState.value = successState.copy(isLoadingMore = true)
+                }
             }
 
-            val baseUrl = currentBaseUrl ?: return@launch
-            val typeId = _selectedCategoryId.value?.takeIf { it != 0 }
-
-            vodRepository.getVodList(baseUrl, currentPage, typeId).fold(
-                onSuccess = { response ->
-                    val vodList = response.list ?: emptyList()
-                    if (vodList.isEmpty()) {
-                        _uiState.value = if (currentPage == 1) HomeUiState.Empty else {
-                            (_uiState.value as? HomeUiState.Success)?.copy(hasMore = false) ?: HomeUiState.Empty
+            try {
+                vodRepository.getVodList(baseUrl, pageToLoad, typeId).fold(
+                    onSuccess = { response ->
+                        val vodList = response.list ?: emptyList()
+                        if (vodList.isEmpty()) {
+                            _uiState.value = if (pageToLoad == 1) {
+                                HomeUiState.Empty
+                            } else {
+                                (previousState as? HomeUiState.Success)?.copy(
+                                    hasMore = false,
+                                    isLoadingMore = false,
+                                    isRefreshing = false
+                                ) ?: HomeUiState.Empty
+                            }
+                        } else {
+                            val existingList = if (pageToLoad == 1) {
+                                emptyList()
+                            } else {
+                                (previousState as? HomeUiState.Success)?.vodList ?: emptyList()
+                            }
+                            _uiState.value = HomeUiState.Success(
+                                vodList = existingList + vodList,
+                                hasMore = vodList.size >= 20,
+                                isRefreshing = false,
+                                isLoadingMore = false
+                            )
+                            currentPage = pageToLoad + 1
                         }
-                    } else {
-                        val existingList = if (isRefresh) emptyList() else {
-                            (_uiState.value as? HomeUiState.Success)?.vodList ?: emptyList()
+                    },
+                    onFailure = { error ->
+                        if (isRefresh) {
+                            currentPage = previousPage
                         }
-                        _uiState.value = HomeUiState.Success(
-                            vodList = existingList + vodList,
-                            hasMore = vodList.size >= 20
-                        )
-                        currentPage++
+                        _uiState.value = when (previousState) {
+                            is HomeUiState.Success -> previousState.copy(
+                                hasMore = if (pageToLoad == 1) previousState.hasMore else false,
+                                isRefreshing = false,
+                                isLoadingMore = false
+                            )
+                            else -> HomeUiState.Error(error.message ?: "加载失败")
+                        }
                     }
-                },
-                onFailure = { error ->
-                    _uiState.value = HomeUiState.Error(error.message ?: "加载失败")
-                }
-            )
+                )
+            } finally {
+                isLoadingVodList = false
+            }
         }
+    }
+
+    fun loadMore() {
+        loadVodList(isRefresh = false)
     }
 
     fun refresh() {
