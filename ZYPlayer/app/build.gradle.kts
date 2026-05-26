@@ -11,6 +11,7 @@ android {
 
     val ciVersionName = System.getenv("VERSION_NAME")?.takeIf { it.isNotBlank() }
     val ciVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull()
+    val ciDebugKeystorePath = System.getenv("ANDROID_DEBUG_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
 
     defaultConfig {
         applicationId = "com.zy.player"
@@ -25,7 +26,24 @@ android {
         }
     }
 
+    signingConfigs {
+        ciDebugKeystorePath?.let { keystorePath ->
+            getByName("debug") {
+                storeFile = file(keystorePath)
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            ciDebugKeystorePath?.let {
+                signingConfig = signingConfigs.getByName("debug")
+            }
+        }
+
         release {
             isMinifyEnabled = false
             proguardFiles(
