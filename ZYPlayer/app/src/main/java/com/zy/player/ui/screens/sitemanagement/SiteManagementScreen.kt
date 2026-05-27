@@ -16,9 +16,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -44,6 +46,7 @@ import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.components.CinemaMessage
 import com.zy.player.ui.components.PageHeader
 import com.zy.player.ui.components.SourceEditorDialog
+import com.zy.player.ui.components.SourceCheckResultDialog
 import com.zy.player.ui.theme.AppColors
 import com.zy.player.ui.theme.Dimens
 
@@ -53,6 +56,8 @@ fun SiteManagementScreen(
     viewModel: SiteManagementViewModel = hiltViewModel()
 ) {
     val sites by viewModel.sites.collectAsState()
+    val checkingSiteId by viewModel.checkingSiteId.collectAsState()
+    val checkResultDialog by viewModel.checkResultDialog.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var editingSite by remember { mutableStateOf<VideoSiteEntity?>(null) }
     var deletingSite by remember { mutableStateOf<VideoSiteEntity?>(null) }
@@ -106,7 +111,10 @@ fun SiteManagementScreen(
                             onEdit = { editingSite = site },
                             onDelete = { deletingSite = site },
                             onMoveUp = { viewModel.moveSiteUp(site) },
-                            onMoveDown = { viewModel.moveSiteDown(site) }
+                            onMoveDown = { viewModel.moveSiteDown(site) },
+                            onCheck = { viewModel.checkSite(site) },
+                            isChecking = checkingSiteId == site.id,
+                            isCheckEnabled = checkingSiteId == null
                         )
                     }
                 }
@@ -161,6 +169,13 @@ fun SiteManagementScreen(
             }
         )
     }
+
+    checkResultDialog?.let { state ->
+        SourceCheckResultDialog(
+            state = state,
+            onDismiss = viewModel::dismissCheckResultDialog
+        )
+    }
 }
 
 @Composable
@@ -172,7 +187,10 @@ private fun SiteItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit
+    onMoveDown: () -> Unit,
+    onCheck: () -> Unit,
+    isChecking: Boolean,
+    isCheckEnabled: Boolean
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -227,6 +245,13 @@ private fun SiteItem(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ManagementIconButton(
+                    icon = Icons.Default.CheckCircle,
+                    contentDescription = "检测",
+                    enabled = isCheckEnabled || isChecking,
+                    isLoading = isChecking,
+                    onClick = onCheck
+                )
+                ManagementIconButton(
                     icon = Icons.Default.ArrowUpward,
                     contentDescription = "上移",
                     enabled = canMoveUp,
@@ -258,18 +283,27 @@ private fun ManagementIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     enabled: Boolean = true,
+    isLoading: Boolean = false,
     onClick: () -> Unit
 ) {
     IconButton(
         onClick = onClick,
-        enabled = enabled,
+        enabled = enabled && !isLoading,
         modifier = Modifier.size(40.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = if (enabled) AppColors.TextPrimary else AppColors.TextTertiary
-        )
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = AppColors.Primary,
+                strokeWidth = 2.dp
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = if (enabled) AppColors.TextPrimary else AppColors.TextTertiary
+            )
+        }
     }
 }
 

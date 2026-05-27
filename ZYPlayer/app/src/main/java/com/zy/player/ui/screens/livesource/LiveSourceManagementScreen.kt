@@ -16,9 +16,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -44,6 +46,7 @@ import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.components.CinemaMessage
 import com.zy.player.ui.components.PageHeader
 import com.zy.player.ui.components.SourceEditorDialog
+import com.zy.player.ui.components.SourceCheckResultDialog
 import com.zy.player.ui.theme.AppColors
 import com.zy.player.ui.theme.Dimens
 
@@ -53,6 +56,8 @@ fun LiveSourceManagementScreen(
     viewModel: LiveSourceManagementViewModel = hiltViewModel()
 ) {
     val sources by viewModel.sources.collectAsState()
+    val checkingSourceId by viewModel.checkingSourceId.collectAsState()
+    val checkResultDialog by viewModel.checkResultDialog.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
     var editingSource by remember { mutableStateOf<LiveSourceEntity?>(null) }
     var deletingSource by remember { mutableStateOf<LiveSourceEntity?>(null) }
@@ -95,7 +100,10 @@ fun LiveSourceManagementScreen(
                             onEdit = { editingSource = source },
                             onDelete = { deletingSource = source },
                             onMoveUp = { viewModel.moveSourceUp(source) },
-                            onMoveDown = { viewModel.moveSourceDown(source) }
+                            onMoveDown = { viewModel.moveSourceDown(source) },
+                            onCheck = { viewModel.checkSource(source) },
+                            isChecking = checkingSourceId == source.id,
+                            isCheckEnabled = checkingSourceId == null
                         )
                     }
                 }
@@ -138,6 +146,13 @@ fun LiveSourceManagementScreen(
             }
         )
     }
+
+    checkResultDialog?.let { state ->
+        SourceCheckResultDialog(
+            state = state,
+            onDismiss = viewModel::dismissCheckResultDialog
+        )
+    }
 }
 
 @Composable
@@ -149,7 +164,10 @@ private fun LiveSourceItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit
+    onMoveDown: () -> Unit,
+    onCheck: () -> Unit,
+    isChecking: Boolean,
+    isCheckEnabled: Boolean
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -204,6 +222,13 @@ private fun LiveSourceItem(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ManagementIconButton(
+                    icon = Icons.Default.CheckCircle,
+                    contentDescription = "检测",
+                    enabled = isCheckEnabled || isChecking,
+                    isLoading = isChecking,
+                    onClick = onCheck
+                )
+                ManagementIconButton(
                     icon = Icons.Default.ArrowUpward,
                     contentDescription = "上移",
                     enabled = canMoveUp,
@@ -235,18 +260,27 @@ private fun ManagementIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     enabled: Boolean = true,
+    isLoading: Boolean = false,
     onClick: () -> Unit
 ) {
     IconButton(
         onClick = onClick,
-        enabled = enabled,
+        enabled = enabled && !isLoading,
         modifier = Modifier.size(40.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = if (enabled) AppColors.TextPrimary else AppColors.TextTertiary
-        )
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = AppColors.Primary,
+                strokeWidth = 2.dp
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = if (enabled) AppColors.TextPrimary else AppColors.TextTertiary
+            )
+        }
     }
 }
 

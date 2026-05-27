@@ -1,16 +1,21 @@
 package com.zy.player.data.repository
 
 import android.util.Log
+import com.google.gson.Gson
 import com.zy.player.data.remote.VodApiResponse
 import com.zy.player.data.remote.VodApiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class VodRepository @Inject constructor(
-    private val apiService: VodApiService
+    private val apiService: VodApiService,
+    private val okHttpClient: OkHttpClient,
+    private val gson: Gson
 ) {
     companion object {
         private const val TAG = "VodRepository"
@@ -87,6 +92,72 @@ class VodRepository @Inject constructor(
             Result.success(response)
         } catch (e: Exception) {
             Log.e(TAG, "getCategories - Error: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun checkVideoSite(baseUrl: String): Result<VideoSiteCheckResponse> = withContext(Dispatchers.IO) {
+        try {
+            val checkUrl = buildString {
+                append(baseUrl)
+                append(if (baseUrl.contains("?")) "&" else "?")
+                append("ac=videolist&pg=1")
+            }
+            val request = Request.Builder().url(checkUrl).build()
+            okHttpClient.newCall(request).execute().use { response ->
+                val content = response.body?.string().orEmpty()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(
+                        SourceHttpException(
+                            statusCode = response.code,
+                            message = "HTTP ${response.code}",
+                            rawContent = content
+                        )
+                    )
+                }
+
+                if (content.isBlank()) {
+                    return@withContext Result.failure(
+                        SourceDataException("接口返回内容为空", rawContent = content)
+                    )
+                }
+
+                val apiResponse = try {
+                    gson.fromJson(content, VodApiResponse::class.java)
+                } catch (e: Exception) {
+                    return@withContext Result.failure(
+                        SourceDataException(
+                            message = "接口返回内容不是有效 JSON",
+                            rawContent = content,
+                            cause = e
+                        )
+                    )
+                } ?: return@withContext Result.failure(
+                    SourceDataException("接口返回内容不是有效 JSON", rawContent = content)
+                )
+                val hasList = !apiResponse.list.isNullOrEmpty()
+                val hasClass = !apiResponse.`class`.isNullOrEmpty()
+                val hasMeta = apiResponse.code != null || apiResponse.total != null || apiResponse.page != null
+                if (!hasList && !hasClass && !hasMeta) {
+                    return@withContext Result.failure(
+                        SourceDataException(
+                            message = "接口返回 JSON 不包含影视列表、分类或分页字段",
+                            rawContent = content
+                        )
+                    )
+                }
+
+                Result.success(
+                    VideoSiteCheckResponse(
+                        httpCode = response.code,
+                        contentType = response.header("Content-Type"),
+                        rawContent = content,
+                        response = apiResponse
+                    )
+                )
+            }
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }

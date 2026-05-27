@@ -1,6 +1,14 @@
 package com.zy.player.ui.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,15 +36,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -311,34 +325,141 @@ fun CinemaLoading(
     modifier: Modifier = Modifier,
     message: String = "正在连接片库"
 ) {
-    Column(
+    val transition = rememberInfiniteTransition(label = "cinema-loading")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1100, easing = LinearEasing)
+        ),
+        label = "loading-ring-rotation"
+    )
+    val pulse by transition.animateFloat(
+        initialValue = 0.86f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 760, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "loading-pulse"
+    )
+    val dotAlpha by transition.animateFloat(
+        initialValue = 0.42f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 520, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "loading-dot-alpha"
+    )
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 72.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .defaultMinSize(minHeight = 320.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(54.dp)
-                .clip(CircleShape)
-                .background(AppColors.PrimaryLight)
-                .border(2.dp, AppColors.Primary, CircleShape),
-            contentAlignment = Alignment.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(13.dp)
-                    .clip(CircleShape)
-                    .background(AppColors.Primary)
+                    .size(86.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .rotate(rotation)
+                ) {
+                    val strokeWidth = 4.dp.toPx()
+                    val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                    drawArc(
+                        color = AppColors.Primary.copy(alpha = 0.18f),
+                        startAngle = 0f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        style = stroke
+                    )
+                    drawArc(
+                        brush = Brush.sweepGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                AppColors.Primary,
+                                AppColors.Accent,
+                                Color.Transparent
+                            )
+                        ),
+                        startAngle = -90f,
+                        sweepAngle = 250f,
+                        useCenter = false,
+                        style = stroke
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .rotate(rotation)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(AppColors.Accent.copy(alpha = dotAlpha))
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .scale(pulse)
+                        .clip(CircleShape)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    AppColors.Primary.copy(alpha = 0.30f),
+                                    AppColors.Primary.copy(alpha = 0.06f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                        .border(1.dp, AppColors.Primary.copy(alpha = 0.36f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(13.dp)
+                            .clip(CircleShape)
+                            .background(AppColors.Primary)
+                    )
+                }
+            }
+
+            Text(
+                text = message,
+                color = AppColors.TextPrimary,
+                fontSize = 14.sp,
+                lineHeight = 18.sp,
+                fontWeight = FontWeight.Black
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                repeat(3) { index ->
+                    Box(
+                        modifier = Modifier
+                            .size(if (index == 1) 5.dp else 4.dp)
+                            .clip(CircleShape)
+                            .background(
+                                AppColors.Primary.copy(
+                                    alpha = (dotAlpha - index * 0.16f).coerceIn(0.22f, 1f)
+                                )
+                            )
+                    )
+                }
+            }
         }
-        Text(
-            text = message,
-            color = AppColors.TextSecondary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold
-        )
     }
 }
 

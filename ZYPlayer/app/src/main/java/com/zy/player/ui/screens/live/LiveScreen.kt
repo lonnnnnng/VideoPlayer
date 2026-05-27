@@ -71,56 +71,66 @@ fun LiveScreen(
     }
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 18.dp)
-        ) {
-            item {
-                LiveSearchRow(
-                    searchQuery = searchQuery,
-                    onSearchChange = viewModel::setSearchQuery
+        when (val state = uiState) {
+            is LiveUiState.Loading -> {
+                CinemaLoading(
+                    modifier = Modifier.fillMaxSize(),
+                    message = "正在解析直播源"
                 )
             }
-
-            item {
-                SourceTabs(
-                    labels = groups.ifEmpty { listOf("央视", "卫视", "体育", "电影", "少儿") },
-                    selected = selectedGroup,
-                    currentSourceName = currentSourceName,
-                    onSourceClick = { showSourceSelector = true },
-                    onAllClick = viewModel::showAllChannels,
-                    onClick = { group -> viewModel.selectGroup(if (group == selectedGroup) null else group) }
-                )
-            }
-
-            when (val state = uiState) {
-                is LiveUiState.Loading -> item { CinemaLoading(message = "正在解析直播源") }
-                is LiveUiState.Error -> item {
-                    CinemaMessage(
-                        title = "直播源连接失败",
-                        message = state.message,
-                        actionText = "重试",
-                        onAction = { currentSourceId?.let { viewModel.selectSource(it) } }
-                    )
-                }
-                is LiveUiState.Empty -> item {
-                    CinemaMessage(
-                        title = "暂无频道",
-                        message = "当前筛选没有频道，清除搜索或切换分组再试。"
-                    )
-                }
-                is LiveUiState.Success -> {
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 18.dp)
+                ) {
                     item {
-                        CinemaSectionHeader(
-                            title = "频道列表",
-                            meta = "${state.channels.size} 个频道"
+                        LiveSearchRow(
+                            searchQuery = searchQuery,
+                            onSearchChange = viewModel::setSearchQuery
                         )
                     }
-                    items(state.channels) { channel ->
-                        ChannelRow(
-                            channel = channel,
-                            onClick = { onNavigateToPlayer(channel) }
+
+                    item {
+                        SourceTabs(
+                            labels = groups.ifEmpty { listOf("央视", "卫视", "体育", "电影", "少儿") },
+                            selected = selectedGroup,
+                            currentSourceName = currentSourceName,
+                            onSourceClick = { showSourceSelector = true },
+                            onAllClick = viewModel::showAllChannels,
+                            onClick = { group -> viewModel.selectGroup(if (group == selectedGroup) null else group) }
                         )
+                    }
+
+                    when (state) {
+                        is LiveUiState.Error -> item {
+                            CinemaMessage(
+                                title = "直播源连接失败",
+                                message = state.message,
+                                actionText = "重试",
+                                onAction = { currentSourceId?.let { viewModel.selectSource(it) } }
+                            )
+                        }
+                        is LiveUiState.Empty -> item {
+                            CinemaMessage(
+                                title = "暂无频道",
+                                message = "当前筛选没有频道，清除搜索或切换分组再试。"
+                            )
+                        }
+                        is LiveUiState.Success -> {
+                            item {
+                                CinemaSectionHeader(
+                                    title = "频道列表",
+                                    meta = "${state.channels.size} 个频道"
+                                )
+                            }
+                            items(state.channels) { channel ->
+                                ChannelRow(
+                                    channel = channel,
+                                    onClick = { onNavigateToPlayer(channel) }
+                                )
+                            }
+                        }
+                        LiveUiState.Loading -> Unit
                     }
                 }
             }

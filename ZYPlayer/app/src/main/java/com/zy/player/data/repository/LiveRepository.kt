@@ -71,6 +71,49 @@ class LiveRepository @Inject constructor(
         }
     }
 
+    suspend fun checkLiveSource(url: String): Result<LiveSourceCheckResponse> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder().url(url).build()
+            okHttpClient.newCall(request).execute().use { response ->
+                val content = response.body?.string().orEmpty()
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(
+                        SourceHttpException(
+                            statusCode = response.code,
+                            message = "HTTP ${response.code}",
+                            rawContent = content
+                        )
+                    )
+                }
+
+                if (content.isBlank()) {
+                    return@withContext Result.failure(
+                        SourceDataException("接口返回内容为空", rawContent = content)
+                    )
+                }
+
+                val channels = parseM3U(content, url)
+                if (channels.isEmpty()) {
+                    return@withContext Result.failure(
+                        SourceDataException("接口返回内容无法解析出频道", rawContent = content)
+                    )
+                }
+
+                Result.success(
+                    LiveSourceCheckResponse(
+                        httpCode = response.code,
+                        contentType = response.header("Content-Type"),
+                        rawContent = content,
+                        channels = channels
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private fun parseM3U(content: String, sourceUrl: String): List<LiveChannel> {
         val channels = mutableListOf<LiveChannel>()
         val lines = content.lines()
