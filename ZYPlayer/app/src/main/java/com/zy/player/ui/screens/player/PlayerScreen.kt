@@ -57,6 +57,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,8 +83,15 @@ import androidx.media3.ui.PlayerView
 import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.theme.AppColors
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 private const val QUICK_SEEK_MS = 10_000L
+
+private enum class PlayerDragMode {
+    Seek,
+    Brightness,
+    Volume
+}
 
 @Composable
 fun EpisodePlayerScreen(
@@ -1021,6 +1029,20 @@ private fun PlayerSurface(
     context: Context,
     playerViewFactory: @Composable () -> Unit
 ) {
+    val currentPositionState = rememberUpdatedState(currentPosition)
+    val durationState = rememberUpdatedState(duration)
+    val onSeekToState = rememberUpdatedState(onSeekTo)
+    val onToggleControlsState = rememberUpdatedState(onToggleControls)
+    val onTogglePlayState = rememberUpdatedState(onTogglePlay)
+    val onRewindClickState = rememberUpdatedState(onRewindClick)
+    val onForwardClickState = rememberUpdatedState(onForwardClick)
+    val onBrightnessChangeState = rememberUpdatedState(onBrightnessChange)
+    val onVolumeChangeState = rememberUpdatedState(onVolumeChange)
+    val onGestureEndState = rememberUpdatedState(onGestureEnd)
+
+    var seekOverlayPosition by remember { mutableStateOf<Long?>(null) }
+    var seekOverlayForward by remember { mutableStateOf(true) }
+
     Box(
         modifier = modifier
             .then(
@@ -1037,48 +1059,125 @@ private fun PlayerSurface(
             )
             .background(Color.Black)
             .pointerInput(Unit) {
-                detectTapGestures(onTap = { onToggleControls() })
+                detectTapGestures(
+                    onTap = { onToggleControlsState.value() },
+                    onDoubleTap = { offset ->
+                        if (isFullscreen) {
+                            when {
+                                offset.x < size.width / 3f -> {
+                                    onRewindClickState.value?.invoke() ?: onTogglePlayState.value()
+                                }
+
+                                offset.x > size.width * 2f / 3f -> {
+                                    onForwardClickState.value?.invoke() ?: onTogglePlayState.value()
+                                }
+
+                                else -> onTogglePlayState.value()
+                            }
+                        } else {
+                            onTogglePlayState.value()
+                        }
+                    }
+                )
             }
             .pointerInput(Unit) {
+                var dragMode: PlayerDragMode? = null
+                var startX = 0f
+                var startPosition = 0L
+                var startBrightness = 0.5f
+                var startVolume = 0
+                var totalDragX = 0f
+                var totalDragY = 0f
+                val directionThreshold = 10.dp.toPx()
+
+                fun clearGestureOverlays() {
+                    seekOverlayPosition = null
+                    onGestureEndState.value()
+                }
+
                 detectDragGestures(
+                    onDragStart = { offset ->
+                        dragMode = null
+                        startX = offset.x
+                        startPosition = currentPositionState.value
+                        startBrightness = readCurrentBrightness(context, activity)
+                        startVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                        totalDragX = 0f
+                        totalDragY = 0f
+                    },
                     onDrag = { change, dragAmount ->
                         change.consume()
                         val screenWidth = size.width
                         val screenHeight = size.height
-                        val x = change.position.x
-                        val dy = dragAmount.y
+                        if (screenWidth <= 0 || screenHeight <= 0) return@detectDragGestures
 
-                        if (abs(dy) > 5) {
-                            if (x < screenWidth / 2) {
-                                val currentBrightness = try {
-                                    Settings.System.getInt(
-                                        context.contentResolver,
-                                        Settings.System.SCREEN_BRIGHTNESS
-                                    ) / 255f
-                                } catch (e: Exception) {
-                                    0.5f
+                        totalDragX += dragAmount.x
+                        totalDragY += dragAmount.y
+
+                        if (dragMode == null) {
+                            val horizontalDistance = abs(totalDragX)
+                            val verticalDistance = abs(totalDragY)
+                            if (horizontalDistance < directionThreshold && verticalDistance < directionThreshold) {
+                                return@detectDragGestures
+                            }
+
+                            dragMode = when {
+                                isFullscreen &&
+                                    durationState.value > 0L &&
+                                    horizontalDistance > verticalDistance -> PlayerDragMode.Seek
+
+                                verticalDistance >= horizontalDistance -> {
+                                    if (startX < screenWidth / 2f) PlayerDragMode.Brightness else PlayerDragMode.Volume
                                 }
-                                val newBrightness = (currentBrightness - dy / screenHeight).coerceIn(0f, 1f)
+
+                                else -> return@detectDragGestures
+                            }
+                        }
+
+                        when (dragMode) {
+                            PlayerDragMode.Seek -> {
+                                val durationValue = durationState.value
+                                if (durationValue <= 0L) return@detectDragGestures
+                                val delta = (totalDragX / screenWidth * durationValue).toLong()
+                                val target = quickSeekPosition(startPosition, durationValue, delta)
+                                seekOverlayForward = totalDragX >= 0f
+                                seekOverlayPosition = target
+                                onSeekToState.value(target)
+                            }
+
+                            PlayerDragMode.Brightness -> {
+                                val newBrightness = (startBrightness - totalDragY / screenHeight).coerceIn(0f, 1f)
                                 activity?.window?.let { window ->
                                     window.attributes = window.attributes.apply {
                                         screenBrightness = newBrightness
                                     }
                                 }
-                                onBrightnessChange(newBrightness)
-                            } else {
-                                val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                                val delta = (-dy / screenHeight * maxVolume).toInt()
-                                val newVolume = (currentVolume + delta).coerceIn(0, maxVolume)
-                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
-                                onVolumeChange(newVolume)
+                                onBrightnessChangeState.value(newBrightness)
                             }
+
+                            PlayerDragMode.Volume -> {
+                                val volumeDelta = (-totalDragY / screenHeight * maxVolume).roundToInt()
+                                val newVolume = (startVolume + volumeDelta).coerceIn(0, maxVolume)
+                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
+                                onVolumeChangeState.value(newVolume)
+                            }
+
+                            null -> Unit
                         }
                     },
-                    onDragEnd = onGestureEnd
+                    onDragCancel = { clearGestureOverlays() },
+                    onDragEnd = { clearGestureOverlays() }
                 )
             }
     ) {
         playerViewFactory()
+
+        seekOverlayPosition?.let { position ->
+            GestureOverlay(
+                icon = if (seekOverlayForward) Icons.Default.FastForward else Icons.Default.FastRewind,
+                text = "${formatTime(position)} / ${formatTime(duration)}"
+            )
+        }
 
         brightnessOverlay?.let { brightness ->
             GestureOverlay(
@@ -1648,6 +1747,22 @@ private fun GestureOverlay(
                 Text(text = text, fontWeight = FontWeight.Bold)
             }
         }
+    }
+}
+
+private fun readCurrentBrightness(context: Context, activity: Activity?): Float {
+    val windowBrightness = activity?.window?.attributes?.screenBrightness ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+    if (windowBrightness in 0f..1f) {
+        return windowBrightness
+    }
+
+    return try {
+        Settings.System.getInt(
+            context.contentResolver,
+            Settings.System.SCREEN_BRIGHTNESS
+        ) / 255f
+    } catch (e: Exception) {
+        0.5f
     }
 }
 

@@ -1,6 +1,8 @@
 package com.zy.player.ui.navigation
 
 import android.app.Activity
+import android.content.ClipboardManager
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -14,6 +16,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +29,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -73,7 +79,13 @@ fun AppNavGraph(
     val currentRoute = currentDestination?.route
     val topLevelRoutes = bottomNavItems.map { it.route }
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val clipboardManager = remember(context) {
+        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    }
     val activity = context as? Activity
+    var onlineClipboardUrl by remember { mutableStateOf<String?>(null) }
+    var lastHandledClipboardUrl by remember { mutableStateOf<String?>(null) }
     var showExitDialog by remember { mutableStateOf(false) }
 
     val prototypeRoutes = bottomNavItems.map { it.route } + listOf(
@@ -81,6 +93,51 @@ fun AppNavGraph(
         Destinations.EPISODES
     )
     val showBottomBar = currentRoute in prototypeRoutes
+
+    fun handleClipboardPlaylistLink() {
+        val clipboardText = runCatching {
+            clipboardManager.primaryClip
+                ?.takeIf { it.itemCount > 0 }
+                ?.getItemAt(0)
+                ?.coerceToText(context)
+                ?.toString()
+        }.getOrNull()
+        val playlistUrl = findPlaylistUrlInClipboard(clipboardText) ?: return
+        if (playlistUrl == lastHandledClipboardUrl) return
+
+        lastHandledClipboardUrl = playlistUrl
+        onlineClipboardUrl = playlistUrl
+        navController.navigate(Destinations.ONLINE) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = false
+            }
+            launchSingleTop = true
+            restoreState = false
+        }
+    }
+
+    DisposableEffect(clipboardManager) {
+        val listener = ClipboardManager.OnPrimaryClipChangedListener {
+            handleClipboardPlaylistLink()
+        }
+        clipboardManager.addPrimaryClipChangedListener(listener)
+        onDispose {
+            clipboardManager.removePrimaryClipChangedListener(listener)
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, clipboardManager) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                handleClipboardPlaylistLink()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        handleClipboardPlaylistLink()
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Scaffold(
         containerColor = AppColors.Background,
@@ -136,6 +193,7 @@ fun AppNavGraph(
 
             composable(Destinations.ONLINE) {
                 OnlineScreen(
+                    prefillUrl = onlineClipboardUrl,
                     onNavigateToM3u8Player = { url ->
                         navController.navigate(
                             Destinations.episodePlayer(
@@ -358,6 +416,33 @@ fun AppNavGraph(
             }
         )
     }
+}
+
+private val PlaylistUrlRegex = Regex("""https?://[^\s"'<>]+""", RegexOption.IGNORE_CASE)
+
+private fun findPlaylistUrlInClipboard(text: String?): String? {
+    if (text.isNullOrBlank()) return null
+
+    return PlaylistUrlRegex.findAll(text)
+        .map { it.value.trimPlaylistUrlBoundary() }
+        .firstOrNull { candidate ->
+            val normalized = candidate.lowercase()
+            normalized.contains(".m3u8") || normalized.contains(".m3u")
+        }
+}
+
+private fun String.trimPlaylistUrlBoundary(): String {
+    return trim().trimEnd(
+        ',',
+        ';',
+        '.',
+        ')',
+        ']',
+        '}',
+        '。',
+        '，',
+        '；'
+    )
 }
 
 @Composable

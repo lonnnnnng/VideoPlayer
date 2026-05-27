@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +54,7 @@ private enum class OnlineLinkMode {
 
 @Composable
 fun OnlineScreen(
+    prefillUrl: String? = null,
     onNavigateToM3u8Player: (String) -> Unit,
     onNavigateToLivePlayer: (LiveChannel) -> Unit,
     viewModel: OnlineViewModel = hiltViewModel()
@@ -62,6 +64,14 @@ fun OnlineScreen(
     val parseUiState by viewModel.parseUiState.collectAsState()
     val validation = remember(inputUrl) { validateOnlineLink(inputUrl) }
     val mode = remember(inputUrl) { inferOnlineLinkMode(inputUrl) }
+
+    LaunchedEffect(prefillUrl) {
+        val normalizedUrl = prefillUrl?.trim().orEmpty()
+        if (normalizedUrl.isNotBlank() && normalizedUrl != inputUrl) {
+            inputUrl = normalizedUrl
+            viewModel.clearParseResult()
+        }
+    }
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
