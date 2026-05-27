@@ -12,7 +12,7 @@ object Destinations {
     const val DETAIL = "detail/{siteId}/{vodId}"
     const val EPISODES = "episodes/{siteId}/{vodId}"
     const val EPISODE_PLAYER = "episode_player/{siteId}/{vodId}/{episodeUrl}?title={title}&episodeLabel={episodeLabel}"
-    const val LIVE_PLAYER = "live_player/{url}?title={title}&group={group}&format={format}"
+    const val LIVE_PLAYER = "live_player/{url}?title={title}&group={group}&format={format}&sourceId={sourceId}"
     const val HISTORY = "history"
     const val SITE_MANAGEMENT = "site_management"
     const val LIVE_SOURCE_MANAGEMENT = "live_source_management"
@@ -37,12 +37,13 @@ object Destinations {
         url: String,
         title: String = "",
         group: String = "",
-        format: String = ""
+        format: String = "",
+        sourceId: Long = 0L
     ): String {
         val encodedUrl = Uri.encode(url)
         val encodedTitle = Uri.encode(title)
         val encodedGroup = Uri.encode(group)
         val encodedFormat = Uri.encode(format)
-        return "live_player/$encodedUrl?title=$encodedTitle&group=$encodedGroup&format=$encodedFormat"
+        return "live_player/$encodedUrl?title=$encodedTitle&group=$encodedGroup&format=$encodedFormat&sourceId=$sourceId"
     }
 }

@@ -1,5 +1,8 @@
 package com.zy.player.ui.navigation
 
+import android.app.Activity
+import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -12,14 +15,17 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.net.Uri
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -64,12 +70,17 @@ fun AppNavGraph(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val currentRoute = currentDestination?.route
+    val topLevelRoutes = bottomNavItems.map { it.route }
+    val context = LocalContext.current
+    val activity = context as? Activity
+    var showExitDialog by remember { mutableStateOf(false) }
 
     val prototypeRoutes = bottomNavItems.map { it.route } + listOf(
         Destinations.DETAIL,
         Destinations.EPISODES
     )
-    val showBottomBar = currentDestination?.route in prototypeRoutes
+    val showBottomBar = currentRoute in prototypeRoutes
 
     Scaffold(
         containerColor = AppColors.Background,
@@ -109,13 +120,14 @@ fun AppNavGraph(
 
             composable(Destinations.LIVE) {
                 LiveScreen(
-                    onNavigateToPlayer = { channel ->
+                    onNavigateToPlayer = { channel, sourceId ->
                         navController.navigate(
                             Destinations.livePlayer(
                                 url = channel.url,
                                 title = channel.name,
                                 group = channel.group,
-                                format = channel.format
+                                format = channel.format,
+                                sourceId = sourceId ?: 0L
                             )
                         )
                     }
@@ -263,6 +275,10 @@ fun AppNavGraph(
                     navArgument("format") {
                         type = NavType.StringType
                         defaultValue = ""
+                    },
+                    navArgument("sourceId") {
+                        type = NavType.LongType
+                        defaultValue = 0L
                     }
                 )
             ) { backStackEntry ->
@@ -270,11 +286,13 @@ fun AppNavGraph(
                 val title = backStackEntry.arguments?.getString("title").orEmpty()
                 val group = backStackEntry.arguments?.getString("group").orEmpty()
                 val format = backStackEntry.arguments?.getString("format").orEmpty()
+                val sourceId = backStackEntry.arguments?.getLong("sourceId") ?: 0L
                 LivePlayerScreen(
                     url = url,
                     title = title,
                     group = group,
                     format = format,
+                    sourceId = sourceId,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -302,6 +320,43 @@ fun AppNavGraph(
                 )
             }
         }
+
+        BackHandler {
+            if (currentRoute in topLevelRoutes) {
+                showExitDialog = true
+            } else {
+                val popped = navController.popBackStack()
+                if (!popped) {
+                    showExitDialog = true
+                }
+            }
+        }
+    }
+
+    if (showExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            containerColor = AppColors.Surface,
+            titleContentColor = AppColors.TextPrimary,
+            textContentColor = AppColors.TextSecondary,
+            title = { Text("确定要退出吗?") },
+            text = { Text("再次确认后将退出应用。") },
+            dismissButton = {
+                TextButton(onClick = { showExitDialog = false }) {
+                    Text("取消")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showExitDialog = false
+                        activity?.finish()
+                    }
+                ) {
+                    Text("退出", color = AppColors.Error)
+                }
+            }
+        )
     }
 }
 

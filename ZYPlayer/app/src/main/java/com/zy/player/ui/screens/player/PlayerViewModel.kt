@@ -14,6 +14,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.MediaLoadData
 import com.zy.player.data.repository.HistoryRepository
+import com.zy.player.data.repository.LiveRepository
 import com.zy.player.data.repository.SiteRepository
 import com.zy.player.data.repository.VodRepository
 import com.zy.player.domain.model.EpisodeGroup
@@ -727,6 +728,7 @@ class PlayerViewModel @Inject constructor(
 @HiltViewModel
 class LivePlayerViewModel @Inject constructor(
     private val playerManager: PlayerManager,
+    private val liveRepository: LiveRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -739,6 +741,19 @@ class LivePlayerViewModel @Inject constructor(
 
     private val liveUrl: String = savedStateHandle.get<String>("url") ?: ""
     private val channelTitle: String = savedStateHandle.get<String>("title").orEmpty()
+    private val channelGroup: String = savedStateHandle.get<String>("group").orEmpty()
+    private val channelFormat: String = savedStateHandle.get<String>("format").orEmpty()
+    private val sourceId: Long = savedStateHandle.get<Long>("sourceId") ?: 0L
+
+    private data class LivePlaybackCandidate(
+        val url: String,
+        val sourceName: String,
+        val channelName: String,
+        val group: String,
+        val format: String
+    ) {
+        val key: String = url
+    }
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -764,8 +779,16 @@ class LivePlayerViewModel @Inject constructor(
     private val _playbackStats = MutableStateFlow(PlaybackStats())
     val playbackStats: StateFlow<PlaybackStats> = _playbackStats.asStateFlow()
 
+    private val _lineOptions = MutableStateFlow<List<PlayerSourceOption>>(emptyList())
+    val lineOptions: StateFlow<List<PlayerSourceOption>> = _lineOptions.asStateFlow()
+
     private var progressUpdateJob: Job? = null
     private var networkSpeedUpdateJob: Job? = null
+    private val playbackCandidates = mutableListOf<LivePlaybackCandidate>()
+    private val failedLineUrls = mutableSetOf<String>()
+    private var currentCandidateIndex = 0
+    private var sameNameLinesLoaded = false
+    private var isSwitchingLine = false
     private val transferSamples = ArrayDeque<TransferSample>()
     private val transferSamplesLock = Any()
 
@@ -790,7 +813,7 @@ class LivePlayerViewModel @Inject constructor(
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            val sourceName = channelTitle.ifBlank { "IPTV直播" }
+            val sourceName = currentLineLabel()
             when (playbackState) {
                 Player.STATE_BUFFERING -> {
                     _playbackUiState.value = PlaybackUiState(
@@ -801,6 +824,9 @@ class LivePlayerViewModel @Inject constructor(
                 }
                 Player.STATE_READY -> {
                     _duration.value = playerManager.getDuration().coerceAtLeast(0L)
+                    playbackCandidates.getOrNull(currentCandidateIndex)?.let { candidate ->
+                        failedLineUrls -= candidate.url
+                    }
                     _playbackUiState.value = PlaybackUiState(
                         sourceName = sourceName,
                         message = "$sourceName 已接入直播流",
@@ -808,12 +834,7 @@ class LivePlayerViewModel @Inject constructor(
                     )
                 }
                 Player.STATE_ENDED -> {
-                    _playbackUiState.value = PlaybackUiState(
-                        sourceName = sourceName,
-                        message = "$sourceName 直播已结束或中断",
-                        isRecovering = false,
-                        isFailed = true
-                    )
+                    recoverFromLivePlaybackError("直播已结束或中断")
                 }
             }
         }
@@ -827,16 +848,10 @@ class LivePlayerViewModel @Inject constructor(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            val sourceName = channelTitle.ifBlank { "IPTV直播" }
             Log.e(TAG, "onPlayerError - errorCode=${error.errorCode}, message=${error.message}", error)
             _isPlaying.value = false
             stopProgressUpdates()
-            _playbackUiState.value = PlaybackUiState(
-                sourceName = sourceName,
-                message = "$sourceName 连接失败：${error.message ?: "网络不可达"}",
-                isRecovering = false,
-                isFailed = true
-            )
+            recoverFromLivePlaybackError(error.message ?: "网络不可达")
         }
     }
 
@@ -852,13 +867,24 @@ class LivePlayerViewModel @Inject constructor(
     }
 
     init {
-        Log.d(TAG, "init - liveUrl=$liveUrl")
+        Log.d(TAG, "init - liveUrl=$liveUrl, sourceId=$sourceId, title=$channelTitle")
         playerManager.addListener(playerListener)
         playerManager.addAnalyticsListener(analyticsListener)
         playerManager.addTransferByteListener(transferByteListener)
         startNetworkSpeedUpdates()
         if (liveUrl.isNotBlank()) {
-            playLive()
+            playbackCandidates += LivePlaybackCandidate(
+                url = liveUrl,
+                sourceName = "当前直播源",
+                channelName = channelTitle.ifBlank { "直播频道" },
+                group = channelGroup,
+                format = channelFormat.ifBlank { inferLiveFormat(liveUrl) }
+            )
+            publishLineOptions()
+            playLiveCandidate(0)
+            viewModelScope.launch {
+                ensureSameNameLinesLoaded()
+            }
         } else {
             _playbackUiState.value = PlaybackUiState(
                 sourceName = "IPTV直播",
@@ -886,7 +912,29 @@ class LivePlayerViewModel @Inject constructor(
     }
 
     fun retryPlayback() {
-        playLive()
+        if (playbackCandidates.isEmpty()) return
+        failedLineUrls.clear()
+        playLiveCandidate(currentCandidateIndex.coerceIn(0, playbackCandidates.lastIndex))
+    }
+
+    fun loadLiveLineOptions() {
+        viewModelScope.launch {
+            ensureSameNameLinesLoaded()
+        }
+    }
+
+    fun switchToLiveLine(sourceKey: String) {
+        viewModelScope.launch {
+            ensureSameNameLinesLoaded()
+            val index = playbackCandidates.indexOfFirst { it.key == sourceKey }
+            if (index >= 0) {
+                val candidate = playbackCandidates[index]
+                failedLineUrls -= candidate.url
+                playLiveCandidate(index)
+            } else {
+                Log.w(TAG, "switchToLiveLine - source not found: $sourceKey")
+            }
+        }
     }
 
     fun stopPlayback() {
@@ -897,19 +945,179 @@ class LivePlayerViewModel @Inject constructor(
         playerManager.stopAndRelease()
     }
 
-    private fun playLive() {
-        if (liveUrl.isBlank()) return
-        _activeLiveUrl.value = liveUrl
+    private fun playLiveCandidate(index: Int) {
+        val candidate = playbackCandidates.getOrNull(index) ?: return
+        currentCandidateIndex = index
+        _activeLiveUrl.value = candidate.url
         _currentPosition.value = 0L
         _duration.value = 0L
         resetNetworkSpeedSamples()
         _playbackStats.value = PlaybackStats()
+        publishLineOptions()
         _playbackUiState.value = PlaybackUiState(
-            sourceName = channelTitle.ifBlank { "IPTV直播" },
-            message = "正在连接直播流",
+            sourceName = currentLineLabel(),
+            message = "正在连接 ${currentLineLabel()}",
             isRecovering = true
         )
-        playerManager.play(liveUrl)
+        Log.d(TAG, "playLiveCandidate - index=$index, url=${candidate.url}")
+        playerManager.play(candidate.url)
+    }
+
+    private fun recoverFromLivePlaybackError(reason: String) {
+        if (isSwitchingLine) return
+        isSwitchingLine = true
+        viewModelScope.launch {
+            val failedCandidate = playbackCandidates.getOrNull(currentCandidateIndex)
+            failedCandidate?.let { failedLineUrls += it.url }
+            val failedLine = currentLineLabel()
+            _playbackUiState.value = PlaybackUiState(
+                sourceName = failedLine,
+                message = "$failedLine 不可用，正在切换同名备用线路",
+                isRecovering = true
+            )
+
+            ensureSameNameLinesLoaded()
+            val nextIndex = findNextLiveLineIndex()
+            if (nextIndex != null) {
+                playLiveCandidate(nextIndex)
+            } else {
+                _playbackUiState.value = PlaybackUiState(
+                    sourceName = failedLine,
+                    message = "同名频道暂无可用备用线路：$reason",
+                    isRecovering = false,
+                    isFailed = true
+                )
+                publishLineOptions()
+            }
+            isSwitchingLine = false
+        }
+    }
+
+    private fun findNextLiveLineIndex(): Int? {
+        if (playbackCandidates.size <= 1) return null
+        val candidateIndices = ((currentCandidateIndex + 1)..playbackCandidates.lastIndex) +
+            (0 until currentCandidateIndex)
+        return candidateIndices.firstOrNull { index ->
+            playbackCandidates[index].url !in failedLineUrls
+        }
+    }
+
+    private suspend fun ensureSameNameLinesLoaded() {
+        if (sameNameLinesLoaded) {
+            publishLineOptions()
+            return
+        }
+        sameNameLinesLoaded = true
+
+        if (channelTitle.isBlank()) {
+            publishLineOptions()
+            return
+        }
+
+        val enabledSources = liveRepository.getEnabledSources()
+        if (enabledSources.isEmpty()) {
+            publishLineOptions()
+            return
+        }
+
+        val targetName = normalizeLiveChannelName(channelTitle)
+        val orderedSources = enabledSources.sortedBy { source ->
+            if (source.id == sourceId) 0 else 1
+        }
+        val candidates = orderedSources.flatMap { source ->
+            liveRepository.fetchAndParseChannels(source.url)
+                .getOrNull()
+                .orEmpty()
+                .filter { normalizeLiveChannelName(it.name) == targetName }
+                .map { channel ->
+                    LivePlaybackCandidate(
+                        url = channel.url,
+                        sourceName = source.name,
+                        channelName = channel.name,
+                        group = channel.group,
+                        format = channel.format
+                    )
+                }
+        }.distinctBy { it.url }
+
+        mergeLivePlaybackCandidates(candidates)
+    }
+
+    private fun mergeLivePlaybackCandidates(candidates: List<LivePlaybackCandidate>) {
+        candidates.forEach { candidate ->
+            val existingIndex = playbackCandidates.indexOfFirst { it.url == candidate.url }
+            if (existingIndex >= 0) {
+                playbackCandidates[existingIndex] = candidate
+            } else {
+                playbackCandidates += candidate
+            }
+        }
+        val activeIndex = playbackCandidates.indexOfFirst { it.url == _activeLiveUrl.value }
+        currentCandidateIndex = activeIndex.takeIf { it >= 0 } ?: currentCandidateIndex.coerceIn(
+            0,
+            playbackCandidates.lastIndex.coerceAtLeast(0)
+        )
+        publishLineOptions()
+    }
+
+    private fun publishLineOptions() {
+        _lineOptions.value = playbackCandidates.mapIndexed { index, candidate ->
+            PlayerSourceOption(
+                key = candidate.key,
+                sourceName = "线路 ${index + 1}",
+                episodeLabel = liveLineMeta(candidate),
+                isCurrent = index == currentCandidateIndex
+            )
+        }
+    }
+
+    private fun currentLineLabel(): String {
+        val lineNumber = currentCandidateIndex + 1
+        return if (playbackCandidates.size > 1) {
+            "${channelTitle.ifBlank { "直播频道" }} · 线路 $lineNumber"
+        } else {
+            channelTitle.ifBlank { "IPTV直播" }
+        }
+    }
+
+    private fun liveLineMeta(candidate: LivePlaybackCandidate): String {
+        return listOf(
+            candidate.sourceName,
+            candidate.group,
+            candidate.format,
+            liveSourceNameFromUrl(candidate.url)
+        ).filter { it.isNotBlank() }.joinToString(" · ")
+    }
+
+    private fun normalizeLiveChannelName(value: String): String {
+        return value
+            .lowercase()
+            .replace(" ", "")
+            .replace("　", "")
+            .replace("-", "")
+            .replace("_", "")
+            .replace(":", "")
+            .replace("：", "")
+            .replace("频道", "")
+            .replace("高清", "")
+            .replace("超清", "")
+    }
+
+    private fun inferLiveFormat(url: String): String {
+        return when {
+            url.contains(".m3u8", ignoreCase = true) -> "m3u8"
+            url.contains(".flv", ignoreCase = true) -> "flv"
+            url.contains(".mp4", ignoreCase = true) -> "mp4"
+            else -> "IPTV"
+        }
+    }
+
+    private fun liveSourceNameFromUrl(url: String): String {
+        val host = android.net.Uri.parse(url).host.orEmpty()
+        return host
+            .split('.')
+            .firstOrNull { it.length > 2 && it !in setOf("www", "m", "v", "live") }
+            ?: "直播源"
     }
 
     private fun startProgressUpdates() {

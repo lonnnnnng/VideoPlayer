@@ -571,6 +571,7 @@ fun EpisodePlayerScreen(
             }
         )
     }
+
 }
 
 @Composable
@@ -579,11 +580,12 @@ fun LivePlayerScreen(
     title: String,
     group: String,
     format: String,
+    sourceId: Long,
     onNavigateBack: () -> Unit,
     viewModel: LivePlayerViewModel = hiltViewModel()
 ) {
     @Suppress("UNUSED_VARIABLE")
-    val unusedRouteArgs = url to group
+    val unusedRouteArgs = Triple(url, group, sourceId)
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val activity = context as? Activity
@@ -594,8 +596,10 @@ fun LivePlayerScreen(
     val activeLiveUrl by viewModel.activeLiveUrl.collectAsState()
     val playbackUiState by viewModel.playbackUiState.collectAsState()
     val playbackStats by viewModel.playbackStats.collectAsState()
+    val lineOptions by viewModel.lineOptions.collectAsState()
 
     var showCastDialog by remember { mutableStateOf(false) }
+    var showLineDialog by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(false) }
     var isFullscreen by remember { mutableStateOf(false) }
     var brightnessOverlay by remember { mutableStateOf<Float?>(null) }
@@ -603,6 +607,12 @@ fun LivePlayerScreen(
 
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
+    val currentLineOption = lineOptions.firstOrNull { it.isCurrent }
+    val lineButtonLabel = if (lineOptions.size > 1) {
+        "${currentLineOption?.sourceName ?: "线路"}/${lineOptions.size}"
+    } else {
+        "线路"
+    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -742,6 +752,19 @@ fun LivePlayerScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         PlayerUtilityButton(
+                            icon = Icons.Default.SwapHoriz,
+                            label = lineButtonLabel,
+                            onClick = {
+                                viewModel.loadLiveLineOptions()
+                                showLineDialog = true
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            shape = RoundedCornerShape(13.dp)
+                        )
+
+                        PlayerUtilityButton(
                             icon = Icons.Default.Cast,
                             label = "投屏",
                             onClick = { showCastDialog = true },
@@ -832,6 +855,10 @@ fun LivePlayerScreen(
                     onRetryPlayback = viewModel::retryPlayback,
                     onSeekTo = viewModel::seekTo,
                     onToggleFullscreen = { isFullscreen = false },
+                    onSourceClick = {
+                        viewModel.loadLiveLineOptions()
+                        showLineDialog = true
+                    },
                     onCastClick = { showCastDialog = true },
                     onExitFullscreen = { isFullscreen = false },
                     onBrightnessChange = { brightnessOverlay = it },
@@ -860,6 +887,58 @@ fun LivePlayerScreen(
             confirmButton = {
                 TextButton(onClick = { showCastDialog = false }) {
                     Text("知道了")
+                }
+            }
+        )
+    }
+
+    if (showLineDialog) {
+        AlertDialog(
+            onDismissRequest = { showLineDialog = false },
+            containerColor = AppColors.Surface,
+            titleContentColor = AppColors.TextPrimary,
+            textContentColor = AppColors.TextSecondary,
+            title = { Text("直播线路") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    when {
+                        lineOptions.isEmpty() -> {
+                            Text(
+                                text = "正在查找同名频道线路...",
+                                color = AppColors.TextSecondary,
+                                fontSize = 13.sp,
+                                lineHeight = 19.sp
+                            )
+                        }
+                        lineOptions.size == 1 -> {
+                            Text(
+                                text = "当前频道暂无同名备用线路。",
+                                color = AppColors.TextSecondary,
+                                fontSize = 13.sp,
+                                lineHeight = 19.sp
+                            )
+                            LiveLineOptionRow(
+                                option = lineOptions.first(),
+                                onClick = { showLineDialog = false }
+                            )
+                        }
+                        else -> {
+                            lineOptions.forEach { option ->
+                                LiveLineOptionRow(
+                                    option = option,
+                                    onClick = {
+                                        viewModel.switchToLiveLine(option.key)
+                                        showLineDialog = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLineDialog = false }) {
+                    Text("关闭")
                 }
             }
         )
@@ -1386,6 +1465,66 @@ private fun PlayerSourceLinkRow(
                     contentDescription = "复制当前源地址",
                     tint = if (url.isNotBlank()) AppColors.Primary else AppColors.TextTertiary,
                     modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveLineOptionRow(
+    option: PlayerSourceOption,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(58.dp),
+        color = if (option.isCurrent) AppColors.PrimaryLight else AppColors.SurfaceAlt,
+        contentColor = AppColors.TextPrimary,
+        shape = RoundedCornerShape(13.dp),
+        border = BorderStroke(
+            1.dp,
+            if (option.isCurrent) AppColors.Primary.copy(alpha = 0.42f) else AppColors.Divider
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    text = option.sourceName,
+                    color = if (option.isCurrent) AppColors.Primary else AppColors.TextPrimary,
+                    fontSize = 14.sp,
+                    lineHeight = 17.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = option.episodeLabel.ifBlank { "同名频道备用线路" },
+                    color = AppColors.TextTertiary,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            if (option.isCurrent) {
+                Text(
+                    text = "当前",
+                    color = AppColors.Primary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

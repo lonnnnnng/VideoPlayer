@@ -53,7 +53,7 @@ import com.zy.player.ui.theme.AppColors
 
 @Composable
 fun LiveScreen(
-    onNavigateToPlayer: (LiveChannel) -> Unit,
+    onNavigateToPlayer: (LiveChannel, Long?) -> Unit,
     viewModel: LiveViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -126,7 +126,7 @@ fun LiveScreen(
                             items(state.channels) { channel ->
                                 ChannelRow(
                                     channel = channel,
-                                    onClick = { onNavigateToPlayer(channel) }
+                                    onClick = { onNavigateToPlayer(channel, currentSourceId) }
                                 )
                             }
                         }
