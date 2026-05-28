@@ -33,7 +33,7 @@ fun SourceEditorDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(Dimens.paddingMedium),
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(8.dp),
             colors = CardDefaults.cardColors(containerColor = AppColors.Surface),
             border = BorderStroke(1.dp, AppColors.Divider)
         ) {
@@ -57,7 +57,7 @@ fun SourceEditorDialog(
                     label = { Text("名称") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(8.dp),
                     colors = editorTextFieldColors()
                 )
 
@@ -70,7 +70,7 @@ fun SourceEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                     maxLines = 5,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(8.dp),
                     colors = editorTextFieldColors()
                 )
 

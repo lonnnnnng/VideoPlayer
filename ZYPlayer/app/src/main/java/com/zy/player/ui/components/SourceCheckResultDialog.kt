@@ -82,7 +82,7 @@ fun SourceCheckResultDialog(
                         AppColors.Error.copy(alpha = 0.10f)
                     },
                     contentColor = AppColors.TextPrimary,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(8.dp),
                     border = BorderStroke(
                         1.dp,
                         if (state.success) {
@@ -127,9 +127,9 @@ fun SourceCheckResultDialog(
                                     .fillMaxWidth()
                                     .background(
                                         color = Color.Black.copy(alpha = 0.26f),
-                                        shape = RoundedCornerShape(12.dp)
+                                        shape = RoundedCornerShape(8.dp)
                                     )
-                                    .border(1.dp, AppColors.Divider, RoundedCornerShape(12.dp))
+                                    .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
                                     .padding(12.dp),
                                 color = AppColors.TextSecondary,
                                 fontSize = 11.sp,
@@ -154,8 +154,8 @@ private fun SourceCheckSummaryRow(item: SourceCheckSummaryItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.035f), RoundedCornerShape(10.dp))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.035f), RoundedCornerShape(8.dp))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
             .padding(horizontal = 11.dp, vertical = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {

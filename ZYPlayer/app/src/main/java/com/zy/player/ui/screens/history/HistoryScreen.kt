@@ -138,10 +138,10 @@ private fun HistoryItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick),
         color = Color.White.copy(alpha = 0.045f),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Row(
@@ -154,7 +154,7 @@ private fun HistoryItem(
                 modifier = Modifier
                     .width(92.dp)
                     .height(128.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(8.dp))
             )
 
             Column(
@@ -200,7 +200,7 @@ private fun HistoryItem(
                 } else {
                     Text(
                         text = "点击继续播放",
-                        color = AppColors.Accent,
+                        color = AppColors.TextSecondary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp
                     )

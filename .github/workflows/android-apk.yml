@@ -154,6 +154,9 @@ jobs:
           body: |
             ZYPlayer ${{ github.ref_name }}
 
-            - 自动构建正式 release 签名 APK
+            - 按新版 HTML 原型重构 Android 端整体 UI
+            - 首页精简为搜索框和三列剧集列表
+            - 优化直播、在线播放、设置、详情和播放页的黑红视觉风格
+            - 统一 8dp 圆角、紧凑按钮、底部导航和加载组件
             - 可在应用内通过“设置 > 检测更新”下载更新
           files: ZYPlayer/release/*.apk

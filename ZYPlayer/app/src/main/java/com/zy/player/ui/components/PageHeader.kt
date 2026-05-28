@@ -20,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,9 +44,9 @@ fun PageHeader(
                 onClick = onBackClick,
                 modifier = Modifier
                     .size(44.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color.White.copy(alpha = 0.045f))
-                    .border(1.dp, AppColors.Divider, RoundedCornerShape(16.dp))
+                    .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -60,10 +59,9 @@ fun PageHeader(
             text = title,
             modifier = Modifier.weight(1f),
             color = AppColors.TextPrimary,
-            fontSize = 25.sp,
-            lineHeight = 28.sp,
+            fontSize = 18.sp,
+            lineHeight = 22.sp,
             fontWeight = FontWeight.Black,
-            fontFamily = FontFamily.Serif,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

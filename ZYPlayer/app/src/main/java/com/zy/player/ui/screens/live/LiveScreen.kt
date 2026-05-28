@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
@@ -47,7 +48,6 @@ import com.zy.player.domain.model.LiveChannel
 import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.components.CinemaLoading
 import com.zy.player.ui.components.CinemaMessage
-import com.zy.player.ui.components.CinemaSectionHeader
 import com.zy.player.ui.components.CinemaSearchInput
 import com.zy.player.ui.theme.AppColors
 
@@ -81,12 +81,14 @@ fun LiveScreen(
             else -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 18.dp)
+                    contentPadding = PaddingValues(bottom = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     item {
                         LiveSearchRow(
                             searchQuery = searchQuery,
-                            onSearchChange = viewModel::setSearchQuery
+                            onSearchChange = viewModel::setSearchQuery,
+                            onSourceClick = { showSourceSelector = true }
                         )
                     }
 
@@ -117,12 +119,6 @@ fun LiveScreen(
                             )
                         }
                         is LiveUiState.Success -> {
-                            item {
-                                CinemaSectionHeader(
-                                    title = "频道列表",
-                                    meta = "${state.channels.size} 个频道"
-                                )
-                            }
                             items(state.channels) { channel ->
                                 ChannelRow(
                                     channel = channel,
@@ -174,14 +170,40 @@ fun LiveScreen(
 @Composable
 private fun LiveSearchRow(
     searchQuery: String,
-    onSearchChange: (String) -> Unit
+    onSearchChange: (String) -> Unit,
+    onSourceClick: () -> Unit
 ) {
-    CinemaSearchInput(
-        value = searchQuery,
-        placeholder = "搜索频道",
-        onValueChange = onSearchChange,
-        modifier = Modifier.padding(top = 0.dp, bottom = 18.dp)
-    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CinemaSearchInput(
+            value = searchQuery,
+            placeholder = "搜索频道",
+            onValueChange = onSearchChange,
+            modifier = Modifier.weight(1f),
+            horizontalPadding = 0.dp
+        )
+        Surface(
+            onClick = onSourceClick,
+            modifier = Modifier.size(48.dp),
+            color = Color.White.copy(alpha = 0.045f),
+            contentColor = AppColors.TextPrimary,
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, AppColors.Divider)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.Link,
+                    contentDescription = "切换直播源",
+                    modifier = Modifier.size(21.dp)
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -192,10 +214,10 @@ private fun LiveSourceChip(
     Surface(
         onClick = onClick,
         color = AppColors.PrimaryLight,
-        contentColor = AppColors.Primary,
-        shape = RoundedCornerShape(999.dp),
-        border = BorderStroke(1.dp, AppColors.Primary.copy(alpha = 0.34f)),
-        modifier = Modifier.width(68.dp)
+        contentColor = AppColors.TextPrimary,
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, AppColors.Primary.copy(alpha = 0.42f)),
+        modifier = Modifier.width(70.dp)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -205,7 +227,7 @@ private fun LiveSourceChip(
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "切换直播源：$sourceName",
-                tint = AppColors.Primary,
+                tint = AppColors.TextPrimary,
                 modifier = Modifier.size(15.dp)
             )
             Text(
@@ -230,7 +252,7 @@ private fun SourceTabs(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 18.dp)
+            .padding(horizontal = 16.dp)
             .padding(bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -271,13 +293,13 @@ private fun SourceTabChip(
     Surface(
         onClick = onClick,
         color = if (active) AppColors.Primary else Color.White.copy(alpha = 0.04f),
-        contentColor = if (active) AppColors.Background else AppColors.TextSecondary,
-        shape = RoundedCornerShape(999.dp),
+        contentColor = AppColors.TextPrimary,
+        shape = RoundedCornerShape(8.dp),
         border = if (active) null else BorderStroke(1.dp, AppColors.Divider)
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1
@@ -294,9 +316,9 @@ private fun ChannelRow(
         modifier = Modifier
             .padding(horizontal = 18.dp, vertical = 4.5.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(alpha = 0.035f))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(16.dp))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 13.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -304,13 +326,13 @@ private fun ChannelRow(
         Box(
             modifier = Modifier
                 .size(42.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(AppColors.PrimaryLight),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = channel.name.filter { it.isDigit() }.take(2).ifBlank { channel.name.take(1) },
-                color = AppColors.Primary,
+                color = AppColors.TextPrimary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Black
             )
@@ -336,7 +358,7 @@ private fun ChannelRow(
         }
         Text(
             text = "LIVE",
-            color = AppColors.Error,
+            color = AppColors.Success,
             fontSize = 11.sp,
             fontWeight = FontWeight.Black
         )

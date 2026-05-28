@@ -25,8 +25,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Report
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -55,8 +55,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zy.player.ui.components.CinemaBackground
-import com.zy.player.ui.components.CinemaSectionHeader
-import com.zy.player.ui.components.CinemaTopBar
 import com.zy.player.ui.theme.AppColors
 import java.io.File
 
@@ -69,7 +67,6 @@ fun SettingsScreen(
 ) {
     var showResetDialog by remember { mutableStateOf(false) }
     var showDisclaimerDialog by remember { mutableStateOf(false) }
-    var showMoreDialog by remember { mutableStateOf(false) }
     val maintenanceMessage by viewModel.maintenanceMessage.collectAsState()
     val updateUiState by viewModel.updateUiState.collectAsState()
     val context = LocalContext.current
@@ -88,15 +85,17 @@ fun SettingsScreen(
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 18.dp)
+            contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             item {
-                CinemaTopBar(
-                    eyebrow = "Control Room",
-                    title = "设置",
-                    actionIcon = Icons.Default.MoreVert,
-                    actionDescription = "更多",
-                    onActionClick = { showMoreDialog = true }
+                Text(
+                    text = "设置",
+                    color = AppColors.TextPrimary,
+                    fontSize = 18.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(bottom = 10.dp)
                 )
             }
 
@@ -119,14 +118,7 @@ fun SettingsScreen(
                         title = "直播源管理",
                         subtitle = "M3U 源、频道解析、线路刷新",
                         onClick = onNavigateToLiveSourceManagement,
-                        showDivider = false
                     )
-                }
-            }
-
-            item {
-                CinemaSectionHeader(title = "应用维护", meta = "高级")
-                SettingsGroup {
                     SettingsItem(
                         icon = Icons.Default.Download,
                         title = "检测更新",
@@ -138,7 +130,7 @@ fun SettingsScreen(
                         onClick = viewModel::checkForUpdates
                     )
                     SettingsItem(
-                        icon = Icons.Default.Delete,
+                        icon = Icons.Default.RestartAlt,
                         title = "重置应用",
                         subtitle = "清除缓存、恢复默认数据源",
                         onClick = { showResetDialog = true }
@@ -174,22 +166,6 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(onClick = { showResetDialog = false }) {
                     Text("取消")
-                }
-            }
-        )
-    }
-
-    if (showMoreDialog) {
-        AlertDialog(
-            onDismissRequest = { showMoreDialog = false },
-            containerColor = AppColors.Surface,
-            titleContentColor = AppColors.TextPrimary,
-            textContentColor = AppColors.TextSecondary,
-            title = { Text("更多") },
-            text = { Text("ZYPlayer 当前版本支持聚合搜索、资源站换源、直播源管理、播放历史和应用重置。") },
-            confirmButton = {
-                TextButton(onClick = { showMoreDialog = false }) {
-                    Text("知道了")
                 }
             }
         )
@@ -335,11 +311,11 @@ private fun VersionLine(
 private fun SettingsGroup(content: @Composable () -> Unit) {
     Column(
         modifier = Modifier
-            .padding(horizontal = 18.dp, vertical = 8.dp)
+            .padding(vertical = 0.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(alpha = 0.04f))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(22.dp))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
     ) {
         content()
     }
@@ -387,16 +363,16 @@ private fun SettingsItem(
         ) {
             Box(
                 modifier = Modifier
-                    .size(43.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(AppColors.PrimaryLight),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = AppColors.Primary,
-                    modifier = Modifier.size(22.dp)
+                    tint = AppColors.TextPrimary,
+                    modifier = Modifier.size(21.dp)
                 )
             }
             Column(

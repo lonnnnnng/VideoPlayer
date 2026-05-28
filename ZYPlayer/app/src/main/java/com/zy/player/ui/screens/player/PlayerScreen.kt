@@ -289,7 +289,7 @@ fun EpisodePlayerScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(13.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
 
                         Surface(
@@ -305,7 +305,7 @@ fun EpisodePlayerScreen(
                                 .height(44.dp),
                             color = AppColors.SurfaceAlt,
                             contentColor = AppColors.TextPrimary,
-                            shape = RoundedCornerShape(13.dp),
+                            shape = RoundedCornerShape(8.dp),
                             border = BorderStroke(1.dp, AppColors.Divider)
                         ) {
                             Row(
@@ -344,7 +344,7 @@ fun EpisodePlayerScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(13.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
                     }
 
@@ -363,7 +363,7 @@ fun EpisodePlayerScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(13.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
 
                         PlayerUtilityButton(
@@ -373,7 +373,7 @@ fun EpisodePlayerScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(13.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
 
                         PlayerUtilityButton(
@@ -383,7 +383,7 @@ fun EpisodePlayerScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(13.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
 
                         PlayerUtilityButton(
@@ -396,7 +396,7 @@ fun EpisodePlayerScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(13.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
                     }
                 }
@@ -769,7 +769,7 @@ fun LivePlayerScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(13.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
 
                         PlayerUtilityButton(
@@ -779,7 +779,7 @@ fun LivePlayerScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(13.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
 
                         Surface(
@@ -795,7 +795,7 @@ fun LivePlayerScreen(
                                 .height(44.dp),
                             color = AppColors.SurfaceAlt,
                             contentColor = AppColors.TextPrimary,
-                            shape = RoundedCornerShape(13.dp),
+                            shape = RoundedCornerShape(8.dp),
                             border = BorderStroke(1.dp, AppColors.Divider)
                         ) {
                             Row(
@@ -837,7 +837,7 @@ fun LivePlayerScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp),
-                            shape = RoundedCornerShape(13.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
                     }
                 }
@@ -969,7 +969,7 @@ private fun PlayerEpisodeTopBar(
             modifier = Modifier.size(42.dp),
             color = AppColors.SurfaceAlt,
             contentColor = AppColors.TextPrimary,
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(8.dp),
             border = BorderStroke(1.dp, AppColors.Divider)
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -1053,8 +1053,8 @@ private fun PlayerSurface(
                         .padding(horizontal = 18.dp)
                         .fillMaxWidth()
                         .height(292.dp)
-                        .clip(RoundedCornerShape(25.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(25.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
                 }
             )
             .background(Color.Black)
@@ -1393,10 +1393,10 @@ private fun androidx.compose.foundation.layout.BoxScope.PlaybackStatusOverlay(
             .padding(horizontal = 24.dp),
         color = Color.Black.copy(alpha = 0.70f),
         contentColor = Color.White,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(
             1.dp,
-            if (state.isFailed) AppColors.Accent.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.20f)
+            if (state.isFailed) AppColors.Error.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.20f)
         )
     ) {
         Column(
@@ -1406,7 +1406,7 @@ private fun androidx.compose.foundation.layout.BoxScope.PlaybackStatusOverlay(
         ) {
             Text(
                 text = if (state.isFailed) "线路不可用" else recoveringTitle,
-                color = if (state.isFailed) AppColors.Accent else AppColors.Primary,
+                color = if (state.isFailed) AppColors.Error else AppColors.Primary,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Black
             )
@@ -1477,7 +1477,7 @@ private fun PlayerStatsCell(
         modifier = modifier.height(46.dp),
         color = AppColors.SurfaceAlt,
         contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(13.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Column(
@@ -1521,7 +1521,7 @@ private fun PlayerSourceLinkRow(
             .height(58.dp),
         color = AppColors.SurfaceAlt,
         contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Row(
@@ -1582,7 +1582,7 @@ private fun LiveLineOptionRow(
             .height(58.dp),
         color = if (option.isCurrent) AppColors.PrimaryLight else AppColors.SurfaceAlt,
         contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(13.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(
             1.dp,
             if (option.isCurrent) AppColors.Primary.copy(alpha = 0.42f) else AppColors.Divider
@@ -1636,7 +1636,7 @@ private fun PlayerUtilityButton(
     label: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    shape: RoundedCornerShape = RoundedCornerShape(14.dp)
+    shape: RoundedCornerShape = RoundedCornerShape(8.dp)
 ) {
     Surface(
         onClick = onClick,
@@ -1687,7 +1687,7 @@ private fun PlayerFullscreenActionButton(
         modifier = modifier,
         color = Color.Black.copy(alpha = 0.46f),
         contentColor = Color.White,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
     ) {
         Row(
@@ -1732,7 +1732,7 @@ private fun GestureOverlay(
         Surface(
             color = Color.Black.copy(alpha = 0.72f),
             contentColor = Color.White,
-            shape = RoundedCornerShape(18.dp)
+            shape = RoundedCornerShape(8.dp)
         ) {
             Column(
                 modifier = Modifier.padding(18.dp),

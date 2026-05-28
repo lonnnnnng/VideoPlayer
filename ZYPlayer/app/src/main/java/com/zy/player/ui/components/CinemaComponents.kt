@@ -59,7 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zy.player.ui.theme.AppColors
 
-private val CinemaShape = RoundedCornerShape(22.dp)
+private val CinemaShape = RoundedCornerShape(8.dp)
 
 @Composable
 fun CinemaBackground(
@@ -71,9 +71,9 @@ fun CinemaBackground(
             .background(
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color(0xFF0B1111),
+                        Color(0xFF08090D),
                         AppColors.Background,
-                        Color(0xFF10100D)
+                        AppColors.Background
                     )
                 )
             )
@@ -109,10 +109,10 @@ fun CinemaTopBar(
             Text(
                 text = title,
                 color = AppColors.TextPrimary,
-                fontSize = 31.sp,
-                lineHeight = 34.sp,
+                fontSize = 22.sp,
+                lineHeight = 26.sp,
                 fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Serif
+                fontFamily = FontFamily.Default
             )
         }
 
@@ -135,9 +135,9 @@ fun CinemaIconButton(
         onClick = onClick,
         modifier = modifier
             .size(44.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(alpha = 0.045f))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(16.dp))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
     ) {
         Icon(
             imageVector = icon,
@@ -169,7 +169,7 @@ fun CinemaSectionHeader(
         )
         Text(
             text = meta,
-            color = AppColors.Accent,
+            color = AppColors.Primary,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
@@ -262,20 +262,20 @@ private fun CinemaSearchSurface(
         modifier = modifier
             .padding(horizontal = horizontalPadding)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(alpha = 0.045f))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(16.dp))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 15.dp, vertical = 14.dp),
+            .padding(horizontal = 12.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Default.Search,
             contentDescription = null,
-            tint = AppColors.Primary,
+            tint = AppColors.TextSecondary,
             modifier = Modifier.size(20.dp)
         )
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(10.dp))
         content()
     }
 }
@@ -307,7 +307,7 @@ fun CinemaMiniPlayButton(
         modifier = modifier
             .size(42.dp)
             .clip(CircleShape)
-            .background(AppColors.Cream)
+            .background(AppColors.TextPrimary)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -387,7 +387,7 @@ fun CinemaLoading(
                             colors = listOf(
                                 Color.Transparent,
                                 AppColors.Primary,
-                                AppColors.Accent,
+                                AppColors.Primary,
                                 Color.Transparent
                             )
                         ),
@@ -408,7 +408,7 @@ fun CinemaLoading(
                             .align(Alignment.TopCenter)
                             .size(9.dp)
                             .clip(CircleShape)
-                            .background(AppColors.Accent.copy(alpha = dotAlpha))
+                            .background(AppColors.Primary.copy(alpha = dotAlpha))
                     )
                 }
 
@@ -499,7 +499,7 @@ fun CinemaMessage(
                 Spacer(modifier = Modifier.height(4.dp))
                 Surface(
                     onClick = onAction,
-                    color = AppColors.Cream,
+                    color = AppColors.TextPrimary,
                     contentColor = AppColors.Background,
                     shape = RoundedCornerShape(999.dp)
                 ) {

@@ -195,7 +195,7 @@ private fun SiteItem(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Color.White.copy(alpha = 0.045f),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Column(
@@ -229,7 +229,7 @@ private fun SiteItem(
                     )
                     Text(
                         text = "状态 ${site.lastCheckStatus}",
-                        color = AppColors.Accent,
+                        color = AppColors.TextTertiary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )

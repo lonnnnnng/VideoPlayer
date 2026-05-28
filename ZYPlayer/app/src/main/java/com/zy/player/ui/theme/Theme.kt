@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 
 private val DarkCinemaColorScheme = darkColorScheme(
     primary = AppColors.Primary,
-    onPrimary = AppColors.Background,
+    onPrimary = AppColors.TextPrimary,
     secondary = AppColors.Accent,
     background = AppColors.Background,
     surface = AppColors.Surface,

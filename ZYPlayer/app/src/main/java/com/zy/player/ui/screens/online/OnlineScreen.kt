@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
@@ -79,9 +78,9 @@ fun OnlineScreen(
                 .fillMaxSize()
                 .imePadding(),
             contentPadding = PaddingValues(
-                start = 18.dp,
-                top = 18.dp,
-                end = 18.dp,
+                start = 16.dp,
+                top = 10.dp,
+                end = 16.dp,
                 bottom = 96.dp
             ),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -132,17 +131,20 @@ private fun OnlineIntroCopy() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 2.dp, bottom = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.White.copy(alpha = 0.045f))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            text = "在线播放",
+            text = "粘贴链接后直接播放",
             color = AppColors.TextPrimary,
-            fontSize = 24.sp,
+            fontSize = 21.sp,
             fontWeight = FontWeight.Black
         )
         Text(
-            text = "粘贴 m3u8 视频流或 m3u 频道列表链接，系统会自动识别并进入对应播放器。",
+            text = "支持单个 m3u8 视频链接，也支持 m3u 直播列表。检测到剪切板中存在可播放链接时，会自动填充到输入框。",
             color = AppColors.TextSecondary,
             fontSize = 13.sp,
             lineHeight = 19.sp
@@ -160,19 +162,11 @@ private fun OnlineInputField(
         onValueChange = onInputChange,
         modifier = Modifier
             .fillMaxWidth()
-            .height(132.dp),
+            .height(52.dp),
         label = { Text("播放链接") },
         placeholder = { Text("https://.../index.m3u8 或 https://.../playlist.m3u") },
-        leadingIcon = {
-            Icon(
-                imageVector = Icons.Default.Link,
-                contentDescription = null,
-                tint = AppColors.Primary
-            )
-        },
-        minLines = 3,
-        maxLines = 4,
-        shape = RoundedCornerShape(18.dp),
+        singleLine = true,
+        shape = RoundedCornerShape(8.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = AppColors.TextPrimary,
             unfocusedTextColor = AppColors.TextPrimary,
@@ -200,10 +194,10 @@ private fun OnlineActionButton(
         enabled = enabled && !isLoading,
         modifier = Modifier
             .fillMaxWidth()
-            .height(54.dp),
+            .height(48.dp),
         color = if (enabled && !isLoading) AppColors.Primary else Color.White.copy(alpha = 0.06f),
-        contentColor = if (enabled && !isLoading) AppColors.Background else AppColors.TextTertiary,
-        shape = RoundedCornerShape(16.dp),
+        contentColor = if (enabled && !isLoading) AppColors.TextPrimary else AppColors.TextTertiary,
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, if (enabled && !isLoading) Color.Transparent else AppColors.Divider)
     ) {
         Row(
@@ -234,9 +228,9 @@ private fun OnlineParseResultPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(AppColors.Surface.copy(alpha = 0.78f))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(18.dp))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -271,7 +265,7 @@ private fun OnlineChannelRow(
             .height(54.dp),
         color = Color.White.copy(alpha = 0.045f),
         contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Row(

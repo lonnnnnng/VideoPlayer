@@ -23,7 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -454,61 +453,43 @@ private fun FloatingCinemaNavigationBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        AppColors.Background.copy(alpha = 0.94f),
-                        AppColors.Background,
-                        AppColors.Background
-                    )
-                )
-            )
+            .background(AppColors.Shell.copy(alpha = 0.98f))
             .border(1.dp, Color.White.copy(alpha = 0.08f))
             .navigationBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 16.dp)
+            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
     ) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color(0xFA181D1D),
-                            Color(0xFA0D1111)
-                        )
-                    )
-                )
-                .border(1.dp, AppColors.Divider, RoundedCornerShape(24.dp))
-                .padding(6.dp)
+                .height(56.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items.forEach { item ->
-                    val selected = currentRoute == item.route
-                    Surface(
-                        onClick = { onItemClick(item) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                        color = if (selected) AppColors.Cream else Color.Transparent,
-                        contentColor = if (selected) AppColors.Background else AppColors.TextSecondary,
-                        shape = RoundedCornerShape(18.dp)
+            items.forEach { item ->
+                val selected = currentRoute == item.route
+                Surface(
+                    onClick = { onItemClick(item) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    color = if (selected) AppColors.PrimaryLight else Color.Transparent,
+                    contentColor = if (selected) AppColors.TextPrimary else AppColors.TextTertiary,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = item.icon,
-                                contentDescription = item.label,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = item.label,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = item.label,
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
                     }
                 }
             }

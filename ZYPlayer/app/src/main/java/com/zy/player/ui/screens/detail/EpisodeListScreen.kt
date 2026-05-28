@@ -302,16 +302,16 @@ private fun EpisodeResumeNote(label: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(
                 Brush.linearGradient(
                     listOf(
-                        AppColors.Accent.copy(alpha = 0.11f),
+                        AppColors.Primary.copy(alpha = 0.11f),
                         Color.White.copy(alpha = 0.04f)
                     )
                 )
             )
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(20.dp))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -348,7 +348,7 @@ private fun EpisodeRailHead(
         )
         Text(
             text = meta,
-            color = AppColors.Accent,
+            color = AppColors.TextTertiary,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
@@ -379,7 +379,7 @@ private fun EpisodeGrid(
                 onClick = { onEpisodeClick(episode) },
                 color = Color.Transparent,
                 contentColor = if (active) AppColors.Background else AppColors.TextPrimary,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(8.dp),
                 border = if (active) null else BorderStroke(1.dp, AppColors.Divider)
             ) {
                 Column(
@@ -388,7 +388,7 @@ private fun EpisodeGrid(
                         .height(76.dp)
                         .background(
                             when {
-                                active -> Brush.linearGradient(listOf(AppColors.Accent, AppColors.Cream))
+                                active -> Brush.linearGradient(listOf(AppColors.Primary, AppColors.Primary))
                                 watched -> Brush.linearGradient(
                                     listOf(
                                         AppColors.Primary.copy(alpha = 0.12f),
@@ -441,7 +441,7 @@ private fun EpisodeIconButton(
         onClick = onClick,
         color = Color.White.copy(alpha = 0.045f),
         contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Box(

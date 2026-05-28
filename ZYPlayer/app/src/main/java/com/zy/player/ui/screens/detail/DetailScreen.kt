@@ -38,7 +38,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -195,7 +194,7 @@ private fun DetailOverviewCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(
                 Brush.linearGradient(
                     listOf(
@@ -204,7 +203,7 @@ private fun DetailOverviewCard(
                     )
                 )
             )
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(22.dp))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
             .padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(13.dp)
     ) {
@@ -212,9 +211,9 @@ private fun DetailOverviewCard(
             modifier = Modifier
                 .width(116.dp)
                 .height(184.dp)
-                .clip(RoundedCornerShape(17.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(AppColors.SurfaceAlt)
-                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(17.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
         ) {
             NetworkImage(
                 url = source.vodDetail.vod_pic,
@@ -245,7 +244,6 @@ private fun DetailOverviewCard(
                 fontSize = 22.sp,
                 lineHeight = 25.sp,
                 fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Serif,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -297,7 +295,7 @@ private fun DetailProviderSection(
                     title = option.siteName,
                     meta = "${option.episodeGroups.sumOf { it.episodes.size }}集",
                     selected = selected,
-                    minWidth = 104.dp,
+                    minWidth = 86.dp,
                     onClick = { onSourceSelect(option.key) }
                 )
             }
@@ -347,7 +345,7 @@ private fun DetailSourceSection(
                     title = group.name,
                     meta = "${group.episodes.size}集",
                     selected = selected,
-                    minWidth = 96.dp,
+                    minWidth = 78.dp,
                     onClick = { onGroupSelect(group.name) }
                 )
             }
@@ -367,16 +365,16 @@ private fun DetailChoicePill(
         onClick = onClick,
         color = Color.Transparent,
         contentColor = if (selected) AppColors.Background else AppColors.TextSecondary,
-        shape = RoundedCornerShape(999.dp),
+        shape = RoundedCornerShape(8.dp),
         border = if (selected) null else BorderStroke(1.dp, AppColors.Divider)
     ) {
         Row(
             modifier = Modifier
                 .widthIn(min = minWidth, max = 156.dp)
-                .height(36.dp)
+                .height(32.dp)
                 .background(
                     if (selected) {
-                        Brush.linearGradient(listOf(AppColors.Primary, AppColors.Cream))
+                        Brush.linearGradient(listOf(AppColors.Primary, AppColors.Primary))
                     } else {
                         Brush.linearGradient(
                             listOf(
@@ -386,23 +384,23 @@ private fun DetailChoicePill(
                         )
                     }
                 )
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(horizontal = 9.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = title,
                 modifier = Modifier.weight(1f, fill = false),
-                color = if (selected) AppColors.Background else AppColors.TextPrimary,
-                fontSize = 11.sp,
+                color = if (selected) AppColors.TextPrimary else AppColors.TextPrimary,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Black,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = meta,
-                color = if (selected) AppColors.Background else AppColors.TextTertiary,
-                fontSize = 10.sp,
+                color = if (selected) AppColors.TextPrimary else AppColors.TextTertiary,
+                fontSize = 9.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -427,9 +425,9 @@ private fun DetailEpisodesSection(
                 text = "当前线路暂无可播放剧集",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color.White.copy(alpha = 0.04f))
-                    .border(1.dp, AppColors.Divider, RoundedCornerShape(16.dp))
+                    .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
                     .padding(14.dp),
                 color = AppColors.TextTertiary,
                 fontSize = 12.sp
@@ -468,7 +466,7 @@ private fun DetailEpisodeButton(
         modifier = modifier.height(30.dp),
         color = Color.Transparent,
         contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Box(
@@ -518,7 +516,7 @@ private fun DetailRailHead(
         )
         Text(
             text = meta,
-            color = AppColors.Accent,
+            color = AppColors.TextTertiary,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold
         )
@@ -535,7 +533,7 @@ private fun DetailSmallIconButton(
         onClick = onClick,
         color = Color.White.copy(alpha = 0.08f),
         contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
     ) {
         Box(

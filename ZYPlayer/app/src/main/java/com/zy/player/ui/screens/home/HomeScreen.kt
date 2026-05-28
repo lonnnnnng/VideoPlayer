@@ -34,7 +34,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -91,14 +90,10 @@ fun HomeScreen(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 stickyHeader {
                     HomeStickyHeader(
-                        meta = when (val success = uiState as? HomeUiState.Success) {
-                            null -> "片库同步中"
-                            else -> "全部 ${success.vodList.size}"
-                        },
                         onSearchClick = onNavigateToSearch
                     )
                 }
@@ -133,8 +128,8 @@ fun HomeScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 18.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 row.forEach { vod ->
                                     CinemaVodPoster(
@@ -206,53 +201,18 @@ private fun HomeLoadMoreFooter(
 
 @Composable
 private fun HomeStickyHeader(
-    meta: String,
     onSearchClick: () -> Unit
 ) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        AppColors.Background,
-                        AppColors.Background.copy(alpha = 0.98f),
-                        AppColors.Background.copy(alpha = 0.94f)
-                    )
-                )
-            )
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp)
-            )
-            .padding(start = 18.dp, top = 0.dp, end = 18.dp, bottom = 12.dp)
+            .padding(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 12.dp)
     ) {
         CinemaSearchPill(
-            text = "搜索电影、剧集、综艺、动漫",
-            modifier = Modifier.padding(horizontal = 0.dp),
+            text = "搜索片名、演员、年份",
             horizontalPadding = 0.dp,
             onClick = onSearchClick
         )
-        Spacer(modifier = Modifier.height(18.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Text(
-                text = "最近更新",
-                color = AppColors.TextPrimary,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Black
-            )
-            Text(
-                text = meta,
-                color = AppColors.Accent,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
     }
 }
 
@@ -271,9 +231,9 @@ private fun CinemaVodPoster(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(13.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(AppColors.SurfaceAlt)
-                .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(13.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
         ) {
             NetworkImage(
                 url = vod.vod_pic,
@@ -285,9 +245,9 @@ private fun CinemaVodPoster(
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(7.dp),
-                    color = AppColors.Accent,
-                    contentColor = Color(0xFF0C0A05),
+                        .padding(6.dp),
+                    color = AppColors.Primary,
+                    contentColor = AppColors.TextPrimary,
                     shape = RoundedCornerShape(999.dp)
                 ) {
                     Text(
