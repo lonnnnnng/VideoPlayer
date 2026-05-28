@@ -154,9 +154,7 @@ jobs:
           body: |
             ZYPlayer ${{ github.ref_name }}
 
-            - 按新版 HTML 原型重构 Android 端整体 UI
-            - 首页精简为搜索框和三列剧集列表
-            - 优化直播、在线播放、设置、详情和播放页的黑红视觉风格
-            - 统一 8dp 圆角、紧凑按钮、底部导航和加载组件
+            - 修复在线播放页链接输入框聚焦后 placeholder 显示不全的问题
+            - 优化在线播放页长 m3u8/m3u 链接输入展示，支持多行完整查看
             - 可在应用内通过“设置 > 检测更新”下载更新
           files: ZYPlayer/release/*.apk

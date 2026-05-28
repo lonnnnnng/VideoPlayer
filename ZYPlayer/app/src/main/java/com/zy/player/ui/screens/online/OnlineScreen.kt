@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -162,10 +164,23 @@ private fun OnlineInputField(
         onValueChange = onInputChange,
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .heightIn(min = 124.dp, max = 176.dp),
         label = { Text("播放链接") },
-        placeholder = { Text("https://.../index.m3u8 或 https://.../playlist.m3u") },
-        singleLine = true,
+        placeholder = {
+            Text(
+                text = "https://.../index.m3u8 或 https://.../playlist.m3u",
+                fontSize = 13.sp,
+                lineHeight = 19.sp
+            )
+        },
+        textStyle = TextStyle(
+            color = AppColors.TextPrimary,
+            fontSize = 13.sp,
+            lineHeight = 19.sp
+        ),
+        singleLine = false,
+        minLines = 4,
+        maxLines = 6,
         shape = RoundedCornerShape(8.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = AppColors.TextPrimary,
