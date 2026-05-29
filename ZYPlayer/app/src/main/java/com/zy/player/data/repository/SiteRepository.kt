@@ -13,9 +13,13 @@ class SiteRepository @Inject constructor(
 ) {
     fun observeAllSites(): Flow<List<VideoSiteEntity>> = siteDao.observeAll()
 
+    suspend fun getAllSites(): List<VideoSiteEntity> = siteDao.getAll()
+
     suspend fun getEnabledSites(): List<VideoSiteEntity> = siteDao.getEnabled()
 
     suspend fun insertSite(site: VideoSiteEntity): Long = siteDao.insert(site)
+
+    suspend fun insertSites(sites: List<VideoSiteEntity>): List<Long> = siteDao.insertAll(sites)
 
     suspend fun updateSite(site: VideoSiteEntity) = siteDao.update(site)
 

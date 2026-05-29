@@ -5,10 +5,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,10 +22,15 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -58,10 +66,14 @@ fun SiteManagementScreen(
     val sites by viewModel.sites.collectAsState()
     val checkingSiteId by viewModel.checkingSiteId.collectAsState()
     val checkResultDialog by viewModel.checkResultDialog.collectAsState()
+    val importUiState by viewModel.importUiState.collectAsState()
+    val batchCheckUiState by viewModel.batchCheckUiState.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
     var editingSite by remember { mutableStateOf<VideoSiteEntity?>(null) }
     var deletingSite by remember { mutableStateOf<VideoSiteEntity?>(null) }
     var showClearDialog by remember { mutableStateOf(false) }
+    val isBusy = checkingSiteId != null || importUiState.isImporting || batchCheckUiState.isChecking
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -69,38 +81,85 @@ fun SiteManagementScreen(
                 title = "视频源管理",
                 onBackClick = onNavigateBack,
                 actions = {
-                    IconButton(onClick = { showAddDialog = true }) {
+                    IconButton(
+                        onClick = { showImportDialog = true },
+                        enabled = !isBusy
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Link,
+                            contentDescription = "URL导入",
+                            tint = if (!isBusy) AppColors.TextPrimary else AppColors.TextTertiary
+                        )
+                    }
+                    IconButton(
+                        onClick = viewModel::batchCheckSites,
+                        enabled = sites.isNotEmpty() && !isBusy
+                    ) {
+                        if (batchCheckUiState.isChecking) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = AppColors.Primary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "批量检测",
+                                tint = if (sites.isNotEmpty() && !isBusy) AppColors.TextPrimary else AppColors.TextTertiary
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = { showAddDialog = true },
+                        enabled = !isBusy
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Add,
                             contentDescription = "添加",
-                            tint = AppColors.TextPrimary
+                            tint = if (!isBusy) AppColors.TextPrimary else AppColors.TextTertiary
                         )
                     }
                     IconButton(
                         onClick = { showClearDialog = true },
-                        enabled = sites.isNotEmpty()
+                        enabled = sites.isNotEmpty() && !isBusy
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "清空",
-                            tint = if (sites.isNotEmpty()) AppColors.TextPrimary else AppColors.TextTertiary
+                            tint = if (sites.isNotEmpty() && !isBusy) AppColors.TextPrimary else AppColors.TextTertiary
                         )
                     }
                 }
             )
 
+            val statusMessage = batchCheckUiState.takeIf { it.isChecking }?.let {
+                "${it.message.orEmpty()} (${it.currentIndex}/${it.total})"
+            } ?: batchCheckUiState.message ?: importUiState.message
+            statusMessage?.let { message ->
+                ManagementStatusBanner(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    message = message,
+                    onDismiss = {
+                        viewModel.consumeImportMessage()
+                        viewModel.consumeBatchCheckMessage()
+                    }
+                )
+            }
+
             if (sites.isEmpty()) {
                 CinemaMessage(
                     modifier = Modifier.fillMaxSize(),
-                    title = "暂无视频源",
+                    title = if (isBusy) "正在处理视频源" else "暂无视频源",
                     message = "添加资源站接口后，首页和搜索会自动使用启用的源。",
-                    actionText = "添加视频源",
-                    onAction = { showAddDialog = true }
+                    actionText = if (isBusy) null else "添加视频源",
+                    onAction = if (isBusy) null else ({ showAddDialog = true })
                 )
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(Dimens.paddingMedium),
-                    verticalArrangement = Arrangement.spacedBy(Dimens.paddingSmall)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     itemsIndexed(sites) { index, site ->
                         SiteItem(
@@ -114,12 +173,23 @@ fun SiteManagementScreen(
                             onMoveDown = { viewModel.moveSiteDown(site) },
                             onCheck = { viewModel.checkSite(site) },
                             isChecking = checkingSiteId == site.id,
-                            isCheckEnabled = checkingSiteId == null
+                            isCheckEnabled = !isBusy || checkingSiteId == site.id
                         )
                     }
                 }
             }
         }
+    }
+
+    if (showImportDialog) {
+        VideoSiteImportDialog(
+            isImporting = importUiState.isImporting,
+            onDismiss = { showImportDialog = false },
+            onConfirm = { url ->
+                viewModel.importSitesFromUrl(url)
+                showImportDialog = false
+            }
+        )
     }
 
     if (showAddDialog) {
@@ -199,8 +269,8 @@ private fun SiteItem(
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Column(
-            modifier = Modifier.padding(Dimens.paddingMedium),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -214,7 +284,8 @@ private fun SiteItem(
                     Text(
                         text = site.name,
                         color = AppColors.TextPrimary,
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
+                        lineHeight = 18.sp,
                         fontWeight = FontWeight.Black,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -222,16 +293,10 @@ private fun SiteItem(
                     Text(
                         text = site.apiUrl,
                         color = AppColors.TextSecondary,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                        maxLines = 2,
+                        fontSize = 10.sp,
+                        lineHeight = 13.sp,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "状态 ${site.lastCheckStatus}",
-                        color = AppColors.TextTertiary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
                     )
                 }
                 Switch(
@@ -242,37 +307,47 @@ private fun SiteItem(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                ManagementIconButton(
-                    icon = Icons.Default.CheckCircle,
-                    contentDescription = "检测",
-                    enabled = isCheckEnabled || isChecking,
-                    isLoading = isChecking,
-                    onClick = onCheck
+                Text(
+                    text = "状态 ${site.lastCheckStatus}",
+                    color = if (site.enabled) AppColors.TextTertiary else AppColors.Error,
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
-                ManagementIconButton(
-                    icon = Icons.Default.ArrowUpward,
-                    contentDescription = "上移",
-                    enabled = canMoveUp,
-                    onClick = onMoveUp
-                )
-                ManagementIconButton(
-                    icon = Icons.Default.ArrowDownward,
-                    contentDescription = "下移",
-                    enabled = canMoveDown,
-                    onClick = onMoveDown
-                )
-                ManagementIconButton(
-                    icon = Icons.Default.Edit,
-                    contentDescription = "编辑",
-                    onClick = onEdit
-                )
-                ManagementIconButton(
-                    icon = Icons.Default.Delete,
-                    contentDescription = "删除",
-                    onClick = onDelete
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    ManagementIconButton(
+                        icon = Icons.Default.CheckCircle,
+                        contentDescription = "检测",
+                        enabled = isCheckEnabled || isChecking,
+                        isLoading = isChecking,
+                        onClick = onCheck
+                    )
+                    ManagementIconButton(
+                        icon = Icons.Default.ArrowUpward,
+                        contentDescription = "上移",
+                        enabled = canMoveUp,
+                        onClick = onMoveUp
+                    )
+                    ManagementIconButton(
+                        icon = Icons.Default.ArrowDownward,
+                        contentDescription = "下移",
+                        enabled = canMoveDown,
+                        onClick = onMoveDown
+                    )
+                    ManagementIconButton(
+                        icon = Icons.Default.Edit,
+                        contentDescription = "编辑",
+                        onClick = onEdit
+                    )
+                    ManagementIconButton(
+                        icon = Icons.Default.Delete,
+                        contentDescription = "删除",
+                        onClick = onDelete
+                    )
+                }
             }
         }
     }
@@ -289,11 +364,11 @@ private fun ManagementIconButton(
     IconButton(
         onClick = onClick,
         enabled = enabled && !isLoading,
-        modifier = Modifier.size(40.dp)
+        modifier = Modifier.size(30.dp)
     ) {
         if (isLoading) {
             CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(16.dp),
                 color = AppColors.Primary,
                 strokeWidth = 2.dp
             )
@@ -301,10 +376,118 @@ private fun ManagementIconButton(
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
-                tint = if (enabled) AppColors.TextPrimary else AppColors.TextTertiary
+                tint = if (enabled) AppColors.TextPrimary else AppColors.TextTertiary,
+                modifier = Modifier.size(17.dp)
             )
         }
     }
+}
+
+@Composable
+private fun ManagementStatusBanner(
+    modifier: Modifier = Modifier,
+    message: String,
+    onDismiss: () -> Unit
+) {
+    Surface(
+        modifier = modifier,
+        color = AppColors.Primary.copy(alpha = 0.10f),
+        contentColor = AppColors.TextPrimary,
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, AppColors.Primary.copy(alpha = 0.24f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = message,
+                modifier = Modifier.weight(1f),
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                color = AppColors.TextPrimary
+            )
+            TextButton(onClick = onDismiss) {
+                Text("关闭", fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoSiteImportDialog(
+    isImporting: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var url by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = AppColors.Surface,
+        titleContentColor = AppColors.TextPrimary,
+        textContentColor = AppColors.TextSecondary,
+        title = { Text("通过 URL 导入") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "支持 JSON 源配置和 Base58 编码配置。导入时会自动识别 api_site 结构，并跳过已存在的接口地址。",
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    color = AppColors.TextSecondary
+                )
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("配置地址") },
+                    placeholder = { Text("https://pz.v88.qzz.io/?format=0&source=jin18") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    maxLines = 4,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = AppColors.TextPrimary,
+                        unfocusedTextColor = AppColors.TextPrimary,
+                        focusedContainerColor = Color.White.copy(alpha = 0.045f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.045f),
+                        focusedBorderColor = AppColors.Primary,
+                        unfocusedBorderColor = AppColors.Divider,
+                        cursorColor = AppColors.Primary,
+                        focusedLabelColor = AppColors.Primary,
+                        unfocusedLabelColor = AppColors.TextSecondary
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(url) },
+                enabled = url.isNotBlank() && !isImporting,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppColors.Primary,
+                    contentColor = AppColors.Background,
+                    disabledContainerColor = Color.White.copy(alpha = 0.08f),
+                    disabledContentColor = AppColors.TextTertiary
+                )
+            ) {
+                if (isImporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = AppColors.Background,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text("导入")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isImporting) {
+                Text("取消")
+            }
+        }
+    )
 }
 
 @Composable

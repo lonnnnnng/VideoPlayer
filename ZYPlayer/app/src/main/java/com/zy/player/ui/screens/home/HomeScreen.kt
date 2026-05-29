@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -42,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.zy.player.data.remote.VodItem
 import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.components.CinemaLoading
 import com.zy.player.ui.components.CinemaMessage
@@ -58,7 +58,6 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val currentSiteId by viewModel.currentSiteId.collectAsState()
     val listState = rememberLazyListState()
     val successState = uiState as? HomeUiState.Success
     val shouldLoadMore by remember(uiState) {
@@ -70,6 +69,7 @@ fun HomeScreen(
             state.hasMore &&
                 !state.isRefreshing &&
                 !state.isLoadingMore &&
+                !state.isAggregating &&
                 layoutInfo.totalItemsCount > 0 &&
                 lastVisibleIndex >= layoutInfo.totalItemsCount - 3
         }
@@ -117,14 +117,26 @@ fun HomeScreen(
                         item {
                             CinemaMessage(
                                 title = "暂无影片",
-                                message = "当前分类没有返回内容，试试切换资源站或分类。"
+                                message = "当前启用的视频源没有返回内容，试试检查视频源配置。"
                             )
                         }
                     }
                     is HomeUiState.Success -> {
+                        state.warningMessage?.let { warning ->
+                            item {
+                                Text(
+                                    text = warning,
+                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp),
+                                    color = AppColors.TextTertiary,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
+
                         items(
                             items = state.vodList.chunked(3),
-                            key = { row -> row.joinToString(separator = "-") { it.vod_id.toString() } }
+                            key = { row -> row.joinToString(separator = "-") { it.key } }
                         ) { row ->
                             Row(
                                 modifier = Modifier
@@ -132,13 +144,11 @@ fun HomeScreen(
                                     .padding(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                row.forEach { vod ->
+                                row.forEach { item ->
                                     CinemaVodPoster(
-                                        vod = vod,
+                                        item = item,
                                         onClick = {
-                                            currentSiteId?.let { siteId ->
-                                                onNavigateToDetail(siteId, vod.vod_id.toString())
-                                            }
+                                            onNavigateToDetail(item.siteId, item.vod.vod_id.toString())
                                         },
                                         modifier = Modifier.weight(1f)
                                     )
@@ -221,10 +231,11 @@ private fun HomeStickyHeader(
 
 @Composable
 private fun CinemaVodPoster(
-    vod: VodItem,
+    item: HomeVodItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val vod = item.vod
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -244,6 +255,28 @@ private fun CinemaVodPoster(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .widthIn(max = 88.dp),
+                color = if (item.sourceCount > 1) {
+                    AppColors.Primary
+                } else {
+                    Color.Black.copy(alpha = 0.60f)
+                },
+                contentColor = AppColors.TextPrimary,
+                shape = RoundedCornerShape(999.dp)
+            ) {
+                Text(
+                    text = if (item.sourceCount > 1) "${item.sourceCount}源" else item.siteName,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             if (!vod.vod_remarks.isNullOrBlank()) {
                 Surface(
                     modifier = Modifier
@@ -274,7 +307,7 @@ private fun CinemaVodPoster(
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = listOfNotNull(vod.type_name, vod.vod_year).joinToString(" · ").ifBlank { "影视 · 在线" },
+            text = buildHomeVodMeta(item),
             modifier = Modifier.padding(top = 3.dp),
             color = AppColors.TextTertiary,
             fontSize = 11.sp,
@@ -282,4 +315,20 @@ private fun CinemaVodPoster(
             overflow = TextOverflow.Ellipsis
         )
     }
+}
+
+private fun buildHomeVodMeta(item: HomeVodItem): String {
+    val baseMeta = listOfNotNull(
+        item.vod.type_name,
+        item.vod.vod_year
+    ).joinToString(" · ")
+    val sourceMeta = if (item.sourceCount > 1) {
+        item.sourceNames.take(3).joinToString(" / ")
+    } else {
+        item.siteName
+    }
+    return listOf(baseMeta, sourceMeta)
+        .filter { it.isNotBlank() }
+        .joinToString(" · ")
+        .ifBlank { "影视 · 在线" }
 }

@@ -1,6 +1,8 @@
 package com.zy.player.ui.screens.player
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
@@ -65,9 +67,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -106,7 +106,9 @@ fun EpisodePlayerScreen(
     @Suppress("UNUSED_VARIABLE")
     val unusedRouteArgs = Triple(siteId, vodId, episodeUrl)
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
+    val clipboardManager = remember(context) {
+        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    }
     val activity = context as? Activity
 
     val isPlaying by viewModel.isPlaying.collectAsState()
@@ -595,7 +597,9 @@ fun LivePlayerScreen(
     @Suppress("UNUSED_VARIABLE")
     val unusedRouteArgs = Triple(url, group, sourceId)
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
+    val clipboardManager = remember(context) {
+        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    }
     val activity = context as? Activity
 
     val isPlaying by viewModel.isPlaying.collectAsState()
@@ -1859,11 +1863,11 @@ private fun quickSeekPosition(currentPosition: Long, duration: Long, delta: Long
 
 private fun copyPlayerSourceLink(
     context: Context,
-    clipboardManager: androidx.compose.ui.platform.ClipboardManager,
+    clipboardManager: ClipboardManager,
     url: String
 ) {
     if (url.isBlank()) return
-    clipboardManager.setText(AnnotatedString(url))
+    clipboardManager.setPrimaryClip(ClipData.newPlainText("ZYPlayer source link", url))
     Toast.makeText(context, "源地址已复制", Toast.LENGTH_SHORT).show()
 }
 

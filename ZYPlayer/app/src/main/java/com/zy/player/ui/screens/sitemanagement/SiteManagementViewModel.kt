@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zy.player.data.local.entity.VideoSiteEntity
 import com.zy.player.data.repository.SiteRepository
+import com.zy.player.data.repository.VideoSiteImportRepository
 import com.zy.player.data.repository.VideoSiteCheckResponse
 import com.zy.player.data.repository.VodRepository
 import com.zy.player.data.repository.classifySourceCheckFailure
@@ -20,10 +21,23 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class SiteImportUiState(
+    val isImporting: Boolean = false,
+    val message: String? = null
+)
+
+data class BatchCheckUiState(
+    val isChecking: Boolean = false,
+    val currentIndex: Int = 0,
+    val total: Int = 0,
+    val message: String? = null
+)
+
 @HiltViewModel
 class SiteManagementViewModel @Inject constructor(
     private val siteRepository: SiteRepository,
-    private val vodRepository: VodRepository
+    private val vodRepository: VodRepository,
+    private val importRepository: VideoSiteImportRepository
 ) : ViewModel() {
 
     val sites: StateFlow<List<VideoSiteEntity>> = siteRepository.observeAllSites()
@@ -34,6 +48,12 @@ class SiteManagementViewModel @Inject constructor(
 
     private val _checkResultDialog = MutableStateFlow<SourceCheckResultDialogState?>(null)
     val checkResultDialog: StateFlow<SourceCheckResultDialogState?> = _checkResultDialog.asStateFlow()
+
+    private val _importUiState = MutableStateFlow(SiteImportUiState())
+    val importUiState: StateFlow<SiteImportUiState> = _importUiState.asStateFlow()
+
+    private val _batchCheckUiState = MutableStateFlow(BatchCheckUiState())
+    val batchCheckUiState: StateFlow<BatchCheckUiState> = _batchCheckUiState.asStateFlow()
 
     fun addSite(name: String, url: String) {
         viewModelScope.launch {
@@ -85,8 +105,50 @@ class SiteManagementViewModel @Inject constructor(
         }
     }
 
+    fun importSitesFromUrl(url: String) {
+        val trimmedUrl = url.trim()
+        if (trimmedUrl.isBlank() || _importUiState.value.isImporting) return
+
+        viewModelScope.launch {
+            _importUiState.value = SiteImportUiState(isImporting = true, message = null)
+            val result = importRepository.importFromUrl(trimmedUrl)
+            result.fold(
+                onSuccess = { importResult ->
+                    val existingSites = siteRepository.getAllSites()
+                    val existingUrls = existingSites.map { it.apiUrl.normalizeApiUrl() }.toSet()
+                    val maxOrder = existingSites.maxOfOrNull { it.sortOrder } ?: 0
+                    val newSites = importResult.sites
+                        .filterNot { it.apiUrl.normalizeApiUrl() in existingUrls }
+                        .mapIndexed { index, imported ->
+                            VideoSiteEntity(
+                                name = imported.name,
+                                apiUrl = imported.apiUrl,
+                                enabled = true,
+                                sortOrder = maxOrder + index + 1,
+                                lastCheckStatus = "未检测"
+                            )
+                        }
+                    if (newSites.isNotEmpty()) {
+                        siteRepository.insertSites(newSites)
+                    }
+                    val skippedCount = importResult.sites.size - newSites.size
+                    _importUiState.value = SiteImportUiState(
+                        isImporting = false,
+                        message = "已识别 ${importResult.format} 配置，新增 ${newSites.size} 个源，跳过重复 ${skippedCount} 个。"
+                    )
+                },
+                onFailure = { error ->
+                    _importUiState.value = SiteImportUiState(
+                        isImporting = false,
+                        message = "导入失败：${error.message ?: "无法解析源配置"}"
+                    )
+                }
+            )
+        }
+    }
+
     fun checkSite(site: VideoSiteEntity) {
-        if (_checkingSiteId.value != null) return
+        if (_checkingSiteId.value != null || _batchCheckUiState.value.isChecking) return
 
         viewModelScope.launch {
             _checkingSiteId.value = site.id
@@ -97,6 +159,7 @@ class SiteManagementViewModel @Inject constructor(
                         siteRepository.updateSite(
                             site.copy(
                                 lastCheckStatus = "可用",
+                                enabled = true,
                                 lastCheckTime = System.currentTimeMillis()
                             )
                         )
@@ -107,6 +170,7 @@ class SiteManagementViewModel @Inject constructor(
                         siteRepository.updateSite(
                             site.copy(
                                 lastCheckStatus = reason.statusText,
+                                enabled = false,
                                 lastCheckTime = System.currentTimeMillis()
                             )
                         )
@@ -129,8 +193,73 @@ class SiteManagementViewModel @Inject constructor(
         }
     }
 
+    fun batchCheckSites() {
+        if (_checkingSiteId.value != null || _batchCheckUiState.value.isChecking) return
+
+        viewModelScope.launch {
+            val currentSites = siteRepository.getAllSites()
+            if (currentSites.isEmpty()) return@launch
+
+            var successCount = 0
+            var failedCount = 0
+            _batchCheckUiState.value = BatchCheckUiState(
+                isChecking = true,
+                total = currentSites.size,
+                message = "准备检测 ${currentSites.size} 个视频源"
+            )
+
+            currentSites.forEachIndexed { index, site ->
+                _batchCheckUiState.value = BatchCheckUiState(
+                    isChecking = true,
+                    currentIndex = index + 1,
+                    total = currentSites.size,
+                    message = "正在检测 ${site.name}"
+                )
+                val result = vodRepository.checkVideoSite(site.apiUrl)
+                result.fold(
+                    onSuccess = {
+                        successCount += 1
+                        siteRepository.updateSite(
+                            site.copy(
+                                enabled = true,
+                                lastCheckStatus = "可用",
+                                lastCheckTime = System.currentTimeMillis()
+                            )
+                        )
+                    },
+                    onFailure = { error ->
+                        failedCount += 1
+                        val reason = classifySourceCheckFailure(error)
+                        siteRepository.updateSite(
+                            site.copy(
+                                enabled = false,
+                                lastCheckStatus = reason.statusText,
+                                lastCheckTime = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                )
+            }
+
+            _batchCheckUiState.value = BatchCheckUiState(
+                isChecking = false,
+                currentIndex = currentSites.size,
+                total = currentSites.size,
+                message = "批量检测完成：可用 ${successCount} 个，已自动禁用 ${failedCount} 个。"
+            )
+        }
+    }
+
     fun dismissCheckResultDialog() {
         _checkResultDialog.value = null
+    }
+
+    fun consumeImportMessage() {
+        _importUiState.value = _importUiState.value.copy(message = null)
+    }
+
+    fun consumeBatchCheckMessage() {
+        _batchCheckUiState.value = _batchCheckUiState.value.copy(message = null)
     }
 
     private fun buildSuccessDialog(
@@ -160,6 +289,9 @@ class SiteManagementViewModel @Inject constructor(
                 SourceCheckSummaryItem("分页信息", "page=${apiResponse.page ?: "-"} / pagecount=${apiResponse.pagecount ?: "-"} / total=${apiResponse.total ?: "-"}"),
                 SourceCheckSummaryItem("列表数量", apiResponse.list.orEmpty().size.toString()),
                 SourceCheckSummaryItem("分类数量", apiResponse.`class`.orEmpty().size.toString()),
+                SourceCheckSummaryItem("搜索能力", response.searchKeyword?.let { keyword ->
+                    "可搜索：$keyword，结果 ${response.searchResultCount ?: 0} 条"
+                } ?: "未验证"),
                 SourceCheckSummaryItem("样例影片", sampleVideos),
                 SourceCheckSummaryItem("样例分类", sampleClasses)
             ),
@@ -170,5 +302,9 @@ class SiteManagementViewModel @Inject constructor(
     private fun String.toDialogContent(maxLength: Int = 4000): String {
         if (length <= maxLength) return this
         return take(maxLength) + "\n\n...返回内容较长，仅展示前 ${maxLength} 字。"
+    }
+
+    private fun String.normalizeApiUrl(): String {
+        return trim().trimEnd('/')
     }
 }

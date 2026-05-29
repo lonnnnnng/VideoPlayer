@@ -12,8 +12,14 @@ interface VideoSiteDao {
     @Query("SELECT * FROM video_sites WHERE enabled = 1 ORDER BY sortOrder ASC, id ASC")
     suspend fun getEnabled(): List<VideoSiteEntity>
 
+    @Query("SELECT * FROM video_sites ORDER BY sortOrder ASC, id ASC")
+    suspend fun getAll(): List<VideoSiteEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(site: VideoSiteEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(sites: List<VideoSiteEntity>): List<Long>
 
     @Update
     suspend fun update(site: VideoSiteEntity)

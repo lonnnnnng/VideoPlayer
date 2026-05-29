@@ -19,7 +19,9 @@ data class VideoSiteCheckResponse(
     val httpCode: Int,
     val contentType: String?,
     val rawContent: String,
-    val response: VodApiResponse
+    val response: VodApiResponse,
+    val searchKeyword: String? = null,
+    val searchResultCount: Int? = null
 )
 
 class SourceHttpException(

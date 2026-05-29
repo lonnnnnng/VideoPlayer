@@ -112,6 +112,7 @@ fun DetailScreen(
                             DetailProviderSection(
                                 options = state.sourceOptions,
                                 selectedKey = selectedSource.key,
+                                isLoading = state.isLoadingSources,
                                 onSourceSelect = viewModel::selectSource
                             )
                         }
@@ -280,10 +281,14 @@ private fun DetailOverviewCard(
 private fun DetailProviderSection(
     options: List<DetailSourceOption>,
     selectedKey: String,
+    isLoading: Boolean,
     onSourceSelect: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        DetailRailHead(title = "播放源", meta = "自动选择最快线路")
+        DetailRailHead(
+            title = "播放源",
+            meta = if (isLoading) "正在聚合其他源" else "自动选择最快线路"
+        )
 
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),

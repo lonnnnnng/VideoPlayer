@@ -11,6 +11,8 @@ import com.zy.player.data.repository.VodRepository
 import com.zy.player.domain.model.EpisodeGroup
 import com.zy.player.domain.parser.VodPlayUrlParser
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -29,7 +31,8 @@ sealed class DetailUiState {
     object Loading : DetailUiState()
     data class Success(
         val selectedSource: DetailSourceOption,
-        val sourceOptions: List<DetailSourceOption>
+        val sourceOptions: List<DetailSourceOption>,
+        val isLoadingSources: Boolean = false
     ) : DetailUiState()
     data class Error(val message: String) : DetailUiState()
 }
@@ -83,14 +86,29 @@ class DetailViewModel @Inject constructor(
                 return@launch
             }
 
+            sourceOptions = listOf(primarySource)
+            _uiState.value = DetailUiState.Success(
+                selectedSource = primarySource,
+                sourceOptions = sourceOptions,
+                isLoadingSources = enabledSites.size > 1
+            )
+
             sourceOptions = loadSourceOptions(
                 enabledSites = enabledSites,
                 primarySource = primarySource
             )
-            val selected = sourceOptions.firstOrNull { it.key == primarySource.key } ?: primarySource
+            val currentState = _uiState.value as? DetailUiState.Success
+            val selected = currentState
+                ?.selectedSource
+                ?.let { currentSelected ->
+                    sourceOptions.firstOrNull { it.key == currentSelected.key }
+                }
+                ?: sourceOptions.firstOrNull { it.key == primarySource.key }
+                ?: primarySource
             _uiState.value = DetailUiState.Success(
                 selectedSource = selected,
-                sourceOptions = sourceOptions
+                sourceOptions = sourceOptions,
+                isLoadingSources = false
             )
         }
     }
@@ -110,34 +128,52 @@ class DetailViewModel @Inject constructor(
     private suspend fun loadSourceOptions(
         enabledSites: List<VideoSiteEntity>,
         primarySource: DetailSourceOption
-    ): List<DetailSourceOption> {
+    ): List<DetailSourceOption> = coroutineScope {
         val options = mutableListOf(primarySource)
         val title = primarySource.vodDetail.vod_name
+        val extraSites = enabledSites.filterNot { it.id == primarySource.siteId }
+        val resultChannel = Channel<DetailSourceOption?>(Channel.UNLIMITED)
 
-        enabledSites
-            .filterNot { it.id == primarySource.siteId }
-            .forEach { site ->
+        extraSites.forEach { site ->
+            launch {
                 val matchedVod = vodRepository.getVodList(
                     baseUrl = site.apiUrl,
                     page = 1,
                     keyword = title
                 ).getOrNull()
-                    ?.list
-                    .orEmpty()
-                    .let { list ->
-                        list.firstOrNull { normalizeTitle(it.vod_name) == normalizeTitle(title) }
-                            ?: list.firstOrNull { normalizeTitle(it.vod_name).contains(normalizeTitle(title)) }
-                    }
+                        ?.list
+                        .orEmpty()
+                        .let { list ->
+                            list.firstOrNull { normalizeTitle(it.vod_name) == normalizeTitle(title) }
+                                ?: list.firstOrNull { normalizeTitle(it.vod_name).contains(normalizeTitle(title)) }
+                        }
 
-                matchedVod?.let { vod ->
-                    loadSourceDetail(site, vod.vod_id.toString())?.let { source ->
-                        options += source
+                resultChannel.send(
+                    matchedVod?.let { vod ->
+                        loadSourceDetail(site, vod.vod_id.toString())
                     }
+                )
+            }
+        }
+
+        repeat(extraSites.size) {
+            val source = resultChannel.receive()
+            if (source != null) {
+                options += source
+                val currentState = _uiState.value as? DetailUiState.Success
+                if (currentState != null) {
+                    val mergedOptions = (currentState.sourceOptions + source).distinctBy { it.key }
+                    _uiState.value = currentState.copy(
+                        sourceOptions = mergedOptions,
+                        isLoadingSources = true
+                    )
                 }
             }
+        }
+        resultChannel.close()
 
         Log.d(TAG, "loadSourceOptions - loaded ${options.size} source options")
-        return options.distinctBy { it.key }
+        options.distinctBy { it.key }
     }
 
     private suspend fun loadSourceDetail(

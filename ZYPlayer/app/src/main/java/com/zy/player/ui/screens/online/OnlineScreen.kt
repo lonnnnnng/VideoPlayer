@@ -27,7 +27,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,7 +54,6 @@ private enum class OnlineLinkMode {
 
 @Composable
 fun OnlineScreen(
-    prefillUrl: String? = null,
     onNavigateToM3u8Player: (String) -> Unit,
     onNavigateToLivePlayer: (LiveChannel) -> Unit,
     viewModel: OnlineViewModel = hiltViewModel()
@@ -65,14 +63,6 @@ fun OnlineScreen(
     val parseUiState by viewModel.parseUiState.collectAsState()
     val validation = remember(inputUrl) { validateOnlineLink(inputUrl) }
     val mode = remember(inputUrl) { inferOnlineLinkMode(inputUrl) }
-
-    LaunchedEffect(prefillUrl) {
-        val normalizedUrl = prefillUrl?.trim().orEmpty()
-        if (normalizedUrl.isNotBlank() && normalizedUrl != inputUrl) {
-            inputUrl = normalizedUrl
-            viewModel.clearParseResult()
-        }
-    }
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -140,13 +130,13 @@ private fun OnlineIntroCopy() {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            text = "粘贴链接后直接播放",
+            text = "手动粘贴链接后直接播放",
             color = AppColors.TextPrimary,
             fontSize = 21.sp,
             fontWeight = FontWeight.Black
         )
         Text(
-            text = "支持单个 m3u8 视频链接，也支持 m3u 直播列表。检测到剪切板中存在可播放链接时，会自动填充到输入框。",
+            text = "支持单个 m3u8 视频链接，也支持 m3u 直播列表。输入链接后点击解析播放，应用不会再监听剪切板并自动跳转。",
             color = AppColors.TextSecondary,
             fontSize = 13.sp,
             lineHeight = 19.sp
