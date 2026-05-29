@@ -7,8 +7,6 @@ import com.zy.player.data.remote.VodItem
 import com.zy.player.data.repository.SiteRepository
 import com.zy.player.data.repository.VodRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -56,7 +54,6 @@ class HomeViewModel @Inject constructor(
 
     companion object {
         private const val PAGE_SIZE = 20
-        private const val TITLE_AGGREGATE_IGNORED_CHARS = ":：·・,，.。!！?？_-—/\\()[]【】{}《》<>"
     }
 
     private data class SitePageResult(
@@ -71,22 +68,23 @@ class HomeViewModel @Inject constructor(
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     private var isLoadingVodList = false
-    private var enabledSitesSnapshot: List<VideoSiteEntity> = emptyList()
-    private var enabledSiteSignature: String? = null
-    private val nextPageBySite = mutableMapOf<Long, Int>()
-    private val siteHasMoreById = mutableMapOf<Long, Boolean>()
+    private var homeSiteSnapshot: VideoSiteEntity? = null
+    private var homeSiteSignature: String? = null
+    private var nextPage = 1
+    private var hasMore = true
 
     init {
         viewModelScope.launch {
             siteRepository.observeAllSites().collectLatest { siteList ->
-                val enabledSites = siteList.filter { it.enabled }
-                val signature = enabledSites.joinToString("|") {
-                    "${it.id}:${it.name}:${it.apiUrl}:${it.sortOrder}"
-                }
-                if (signature != enabledSiteSignature) {
-                    enabledSiteSignature = signature
-                    enabledSitesSnapshot = enabledSites
+                val homeSite = selectHomeSite(siteList)
+                val signature = homeSite?.let {
+                    "${it.id}:${it.name}:${it.apiUrl}:${it.sortOrder}:${it.isDefault}"
+                } ?: "none"
+                if (signature != homeSiteSignature) {
+                    homeSiteSignature = signature
+                    homeSiteSnapshot = homeSite
                     resetPaging()
+                    _uiState.value = HomeUiState.Loading
                     loadVodList(isRefresh = true)
                 }
             }
@@ -103,50 +101,35 @@ class HomeViewModel @Inject constructor(
 
         isLoadingVodList = true
         viewModelScope.launch {
-            val enabledSites = enabledSitesSnapshot.ifEmpty {
-                siteRepository.getEnabledSites().also { enabledSitesSnapshot = it }
-            }
-
-            if (enabledSites.isEmpty()) {
-                _uiState.value = HomeUiState.Empty
-                isLoadingVodList = false
-                return@launch
-            }
-
-            if (isRefresh) {
-                resetPaging()
-                _uiState.value = when (previousState) {
-                    is HomeUiState.Success -> previousState.copy(
-                        isRefreshing = true,
-                        isLoadingMore = false,
-                        warningMessage = null
-                    )
-                    else -> HomeUiState.Loading
-                }
-            } else {
-                val successState = previousState as? HomeUiState.Success
-                if (successState != null) {
-                    _uiState.value = successState.copy(isLoadingMore = true)
-                }
-            }
-
             try {
-                val sitesToLoad = enabledSites.filter { site ->
-                    isRefresh || siteHasMoreById[site.id] != false
-                }
+                val homeSite = homeSiteSnapshot ?: siteRepository.getEnabledSites()
+                    .firstOrNull()
+                    ?.also { homeSiteSnapshot = it }
 
-                if (sitesToLoad.isEmpty()) {
-                    _uiState.value = (previousState as? HomeUiState.Success)?.copy(
-                        hasMore = false,
-                        isRefreshing = false,
-                        isLoadingMore = false
-                    ) ?: HomeUiState.Empty
+                if (homeSite == null) {
+                    _uiState.value = HomeUiState.Empty
                     return@launch
                 }
 
-                loadSitePagesProgressively(
-                    enabledSites = enabledSites,
-                    sitesToLoad = sitesToLoad,
+                if (isRefresh) {
+                    resetPaging()
+                    _uiState.value = when (previousState) {
+                        is HomeUiState.Success -> previousState.copy(
+                            isRefreshing = true,
+                            isLoadingMore = false,
+                            warningMessage = null
+                        )
+                        else -> HomeUiState.Loading
+                    }
+                } else {
+                    val successState = previousState as? HomeUiState.Success
+                    if (successState != null) {
+                        _uiState.value = successState.copy(isLoadingMore = true)
+                    }
+                }
+
+                loadHomeSitePage(
+                    homeSite = homeSite,
                     isRefresh = isRefresh,
                     previousState = previousState
                 )
@@ -164,88 +147,62 @@ class HomeViewModel @Inject constructor(
         loadVodList(isRefresh = true)
     }
 
-    private suspend fun loadSitePagesProgressively(
-        enabledSites: List<VideoSiteEntity>,
-        sitesToLoad: List<VideoSiteEntity>,
+    private suspend fun loadHomeSitePage(
+        homeSite: VideoSiteEntity,
         isRefresh: Boolean,
         previousState: HomeUiState
-    ) = coroutineScope {
+    ) {
         val existingSources = if (isRefresh) {
             emptyList()
         } else {
             (previousState as? HomeUiState.Success)?.vodList
                 .orEmpty()
                 .flatMap { it.sources }
-        }.toMutableList()
-        val itemsBySite = linkedMapOf<Long, List<HomeVodSource>>()
-        var loadedCount = 0
-        var failedCount = 0
-        var firstError: Throwable? = null
-        val resultChannel = Channel<SitePageResult>(Channel.UNLIMITED)
-
-        sitesToLoad.forEach { site ->
-            launch {
-                resultChannel.send(
-                    loadSitePage(
-                        site = site,
-                        page = if (isRefresh) 1 else nextPageBySite[site.id] ?: 1,
-                        forceRefresh = isRefresh
-                    )
-                )
-            }
         }
 
-        repeat(sitesToLoad.size) {
-            val result = resultChannel.receive()
-            loadedCount += 1
-            if (result.error == null) {
-                nextPageBySite[result.site.id] = result.page + 1
-                siteHasMoreById[result.site.id] = result.hasMore
-                itemsBySite[result.site.id] = result.items
-            } else {
-                siteHasMoreById[result.site.id] = false
-                failedCount += 1
-                firstError = firstError ?: result.error
-            }
+        val result = loadSitePage(
+            site = homeSite,
+            page = if (isRefresh) 1 else nextPage,
+            forceRefresh = isRefresh
+        )
 
-            val newItems = interleaveSiteItems(
-                enabledSites = enabledSites,
-                itemsBySite = itemsBySite
-            )
-            val combinedList = aggregateHomeVodItems(
-                sources = existingSources + newItems,
-                enabledSites = enabledSites
-            )
-            val isStillAggregating = loadedCount < sitesToLoad.size
-            val hasMore = enabledSites.any { siteHasMoreById[it.id] == true } || isStillAggregating
-            val warningMessage = buildWarningMessage(
-                failedCount = failedCount,
-                isStillAggregating = isStillAggregating
-            )
+        if (result.error == null) {
+            nextPage = result.page + 1
+            hasMore = result.hasMore
+        } else {
+            hasMore = false
+        }
 
-            _uiState.value = when {
-                combinedList.isNotEmpty() -> HomeUiState.Success(
+        val combinedList = if (result.error == null) {
+            toHomeVodItems(existingSources + result.items)
+        } else {
+            toHomeVodItems(existingSources)
+        }
+
+        _uiState.value = when {
+            result.error == null && combinedList.isNotEmpty() -> {
+                HomeUiState.Success(
                     vodList = combinedList,
                     hasMore = hasMore,
                     isRefreshing = false,
                     isLoadingMore = false,
-                    isAggregating = isStillAggregating,
-                    warningMessage = warningMessage
+                    isAggregating = false,
+                    warningMessage = null
                 )
-                isRefresh && previousState is HomeUiState.Success && failedCount > 0 -> previousState.copy(
+            }
+            result.error == null -> HomeUiState.Empty
+            previousState is HomeUiState.Success -> {
+                val message = if (isRefresh) "刷新失败，已保留当前列表" else "加载失败，已保留当前列表"
+                previousState.copy(
+                    hasMore = false,
                     isRefreshing = false,
                     isLoadingMore = false,
-                    isAggregating = isStillAggregating,
-                    warningMessage = "刷新失败，已保留当前列表"
+                    isAggregating = false,
+                    warningMessage = message
                 )
-                !isStillAggregating && failedCount > 0 -> HomeUiState.Error(
-                    firstError?.message ?: "所有视频源加载失败"
-                )
-                !isStillAggregating -> HomeUiState.Empty
-                else -> _uiState.value
             }
+            else -> HomeUiState.Error(result.error.message ?: "默认视频源加载失败")
         }
-        resultChannel.close()
     }
 
     private suspend fun loadSitePage(
@@ -291,72 +248,21 @@ class HomeViewModel @Inject constructor(
         )
     }
 
-    private fun buildWarningMessage(
-        failedCount: Int,
-        isStillAggregating: Boolean
-    ): String? {
-        return when {
-            failedCount > 0 && isStillAggregating -> "${failedCount} 个视频源加载失败，其他源仍在聚合"
-            failedCount > 0 -> "${failedCount} 个视频源加载失败，已显示可用内容"
-            isStillAggregating -> "正在聚合其他视频源"
-            else -> null
+    private fun toHomeVodItems(sources: List<HomeVodSource>): List<HomeVodItem> {
+        return sources.distinctBy { it.key }.map { source ->
+            HomeVodItem(groupKey = source.key, sources = listOf(source))
         }
     }
 
-    private fun interleaveSiteItems(
-        enabledSites: List<VideoSiteEntity>,
-        itemsBySite: Map<Long, List<HomeVodSource>>
-    ): List<HomeVodSource> {
-        val orderedSiteItems = enabledSites.map { site ->
-            itemsBySite[site.id].orEmpty()
-        }
-        val maxSize = orderedSiteItems.maxOfOrNull { it.size } ?: 0
-        return buildList {
-            for (index in 0 until maxSize) {
-                orderedSiteItems.forEach { items ->
-                    items.getOrNull(index)?.let { add(it) }
-                }
-            }
-        }
-    }
-
-    private fun aggregateHomeVodItems(
-        sources: List<HomeVodSource>,
-        enabledSites: List<VideoSiteEntity>
-    ): List<HomeVodItem> {
-        val siteRank = enabledSites.mapIndexed { index, site -> site.id to index }.toMap()
-        val grouped = linkedMapOf<String, MutableList<HomeVodSource>>()
-
-        sources.forEach { source ->
-            val groupKey = aggregateKey(source.vod)
-            if (groupKey.isBlank()) {
-                grouped.getOrPut(source.key) { mutableListOf() } += source
-            } else {
-                grouped.getOrPut(groupKey) { mutableListOf() } += source
-            }
-        }
-
-        return grouped.map { (groupKey, groupSources) ->
-            val uniqueSources = groupSources
-                .distinctBy { it.siteId }
-                .sortedWith(
-                    compareBy<HomeVodSource> { siteRank[it.siteId] ?: Int.MAX_VALUE }
-                        .thenBy { it.siteName }
-                )
-            HomeVodItem(groupKey = groupKey, sources = uniqueSources)
-        }
-    }
-
-    private fun aggregateKey(vod: VodItem): String {
-        return vod.vod_name
-            .lowercase()
-            .filterNot { char ->
-                char.isWhitespace() || char in TITLE_AGGREGATE_IGNORED_CHARS
-            }
+    private fun selectHomeSite(sites: List<VideoSiteEntity>): VideoSiteEntity? {
+        return sites
+            .filter { it.enabled }
+            .sortedWith(compareByDescending<VideoSiteEntity> { it.isDefault }.thenBy { it.sortOrder }.thenBy { it.id })
+            .firstOrNull()
     }
 
     private fun resetPaging() {
-        nextPageBySite.clear()
-        siteHasMoreById.clear()
+        nextPage = 1
+        hasMore = true
     }
 }

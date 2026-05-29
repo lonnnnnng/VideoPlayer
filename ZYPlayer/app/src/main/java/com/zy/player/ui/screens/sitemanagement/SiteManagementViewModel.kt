@@ -13,6 +13,7 @@ import com.zy.player.data.repository.sourceCheckReturnedContent
 import com.zy.player.ui.components.SourceCheckResultDialogState
 import com.zy.player.ui.components.SourceCheckSummaryItem
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -83,7 +84,13 @@ class SiteManagementViewModel @Inject constructor(
 
     fun toggleEnabled(site: VideoSiteEntity) {
         viewModelScope.launch {
-            siteRepository.updateSite(site.copy(enabled = !site.enabled))
+            val enabled = !site.enabled
+            siteRepository.updateSite(
+                site.copy(
+                    enabled = enabled,
+                    isDefault = if (!enabled) false else site.isDefault
+                )
+            )
         }
     }
 
@@ -102,6 +109,14 @@ class SiteManagementViewModel @Inject constructor(
     fun clearAllSites() {
         viewModelScope.launch {
             siteRepository.clearAllSites()
+        }
+    }
+
+    fun setDefaultSite(site: VideoSiteEntity) {
+        if (_checkingSiteId.value != null || _batchCheckUiState.value.isChecking) return
+
+        viewModelScope.launch {
+            siteRepository.setDefaultSite(site.id)
         }
     }
 
@@ -160,7 +175,8 @@ class SiteManagementViewModel @Inject constructor(
                             site.copy(
                                 lastCheckStatus = "可用",
                                 enabled = true,
-                                lastCheckTime = System.currentTimeMillis()
+                                lastCheckTime = System.currentTimeMillis(),
+                                lastLatencyMs = response.latencyMs
                             )
                         )
                         _checkResultDialog.value = buildSuccessDialog(site, response)
@@ -171,7 +187,9 @@ class SiteManagementViewModel @Inject constructor(
                             site.copy(
                                 lastCheckStatus = reason.statusText,
                                 enabled = false,
-                                lastCheckTime = System.currentTimeMillis()
+                                lastCheckTime = System.currentTimeMillis(),
+                                lastLatencyMs = 0,
+                                isDefault = false
                             )
                         )
                         _checkResultDialog.value = SourceCheckResultDialogState(
@@ -202,6 +220,7 @@ class SiteManagementViewModel @Inject constructor(
 
             var successCount = 0
             var failedCount = 0
+            val checkedSites = mutableListOf<VideoSiteEntity>()
             _batchCheckUiState.value = BatchCheckUiState(
                 isChecking = true,
                 total = currentSites.size,
@@ -215,37 +234,45 @@ class SiteManagementViewModel @Inject constructor(
                     total = currentSites.size,
                     message = "正在检测 ${site.name}"
                 )
-                val result = vodRepository.checkVideoSite(site.apiUrl)
+                val result = vodRepository.checkVideoSite(site.apiUrl, timeoutMs = BATCH_CHECK_TIMEOUT_MS)
                 result.fold(
-                    onSuccess = {
+                    onSuccess = { response ->
                         successCount += 1
-                        siteRepository.updateSite(
+                        checkedSites +=
                             site.copy(
                                 enabled = true,
                                 lastCheckStatus = "可用",
-                                lastCheckTime = System.currentTimeMillis()
+                                lastCheckTime = System.currentTimeMillis(),
+                                lastLatencyMs = response.latencyMs
                             )
-                        )
                     },
                     onFailure = { error ->
                         failedCount += 1
-                        val reason = classifySourceCheckFailure(error)
-                        siteRepository.updateSite(
+                        val reason = if (error is TimeoutCancellationException) {
+                            "超时"
+                        } else {
+                            classifySourceCheckFailure(error).statusText
+                        }
+                        checkedSites +=
                             site.copy(
                                 enabled = false,
-                                lastCheckStatus = reason.statusText,
-                                lastCheckTime = System.currentTimeMillis()
+                                lastCheckStatus = reason,
+                                lastCheckTime = System.currentTimeMillis(),
+                                lastLatencyMs = 0,
+                                isDefault = false
                             )
-                        )
                     }
                 )
             }
+
+            val reorderedSites = reorderCheckedSites(checkedSites)
+            siteRepository.updateSites(reorderedSites)
 
             _batchCheckUiState.value = BatchCheckUiState(
                 isChecking = false,
                 currentIndex = currentSites.size,
                 total = currentSites.size,
-                message = "批量检测完成：可用 ${successCount} 个，已自动禁用 ${failedCount} 个。"
+                message = "批量检测完成：可用 ${successCount} 个，已自动禁用 ${failedCount} 个，已按延迟排序。"
             )
         }
     }
@@ -292,6 +319,7 @@ class SiteManagementViewModel @Inject constructor(
                 SourceCheckSummaryItem("搜索能力", response.searchKeyword?.let { keyword ->
                     "可搜索：$keyword，结果 ${response.searchResultCount ?: 0} 条"
                 } ?: "未验证"),
+                SourceCheckSummaryItem("检测延迟", "${response.latencyMs} ms"),
                 SourceCheckSummaryItem("样例影片", sampleVideos),
                 SourceCheckSummaryItem("样例分类", sampleClasses)
             ),
@@ -306,5 +334,26 @@ class SiteManagementViewModel @Inject constructor(
 
     private fun String.normalizeApiUrl(): String {
         return trim().trimEnd('/')
+    }
+
+    private fun reorderCheckedSites(sites: List<VideoSiteEntity>): List<VideoSiteEntity> {
+        val availableSites = sites
+            .filter { it.enabled && it.lastLatencyMs > 0L }
+            .sortedWith(compareBy<VideoSiteEntity> { it.lastLatencyMs }.thenBy { it.id })
+        val unavailableSites = sites
+            .filterNot { it.enabled && it.lastLatencyMs > 0L }
+            .sortedWith(compareBy<VideoSiteEntity> { it.sortOrder }.thenBy { it.id })
+        val defaultSiteId = availableSites.firstOrNull()?.id
+
+        return (availableSites + unavailableSites).mapIndexed { index, site ->
+            site.copy(
+                sortOrder = index + 1,
+                isDefault = site.id == defaultSiteId
+            )
+        }
+    }
+
+    private companion object {
+        const val BATCH_CHECK_TIMEOUT_MS = 10_000L
     }
 }

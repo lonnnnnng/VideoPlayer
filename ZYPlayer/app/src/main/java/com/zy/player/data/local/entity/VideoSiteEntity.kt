@@ -12,5 +12,7 @@ data class VideoSiteEntity(
     val enabled: Boolean = true,
     val sortOrder: Int = 0,
     val lastCheckStatus: String = "未检测",
-    val lastCheckTime: Long = 0
+    val lastCheckTime: Long = 0,
+    val lastLatencyMs: Long = 0,
+    val isDefault: Boolean = false
 )

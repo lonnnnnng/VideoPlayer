@@ -23,6 +23,10 @@ class SiteRepository @Inject constructor(
 
     suspend fun updateSite(site: VideoSiteEntity) = siteDao.update(site)
 
+    suspend fun updateSites(sites: List<VideoSiteEntity>) = siteDao.updateAll(sites)
+
+    suspend fun setDefaultSite(siteId: Long) = siteDao.setDefault(siteId)
+
     suspend fun deleteSite(site: VideoSiteEntity) = siteDao.delete(site)
 
     suspend fun clearAllSites() = siteDao.clearAll()

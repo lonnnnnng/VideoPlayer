@@ -55,22 +55,16 @@ class VideoSiteImportRepository @Inject constructor(
             return Result.failure(SourceDataException("导入地址返回内容为空", rawContent = content))
         }
 
-        parseJson(raw, format = "JSON")?.let { return Result.success(it) }
-
-        val decoded = decodeBase58(raw)
-            ?: return Result.failure(SourceDataException("返回内容既不是 JSON，也不是有效 Base58 编码", rawContent = content))
-
-        return parseJson(decoded, format = "Base58")
+        return parseJson(raw)
             ?.let { Result.success(it) }
-            ?: Result.failure(SourceDataException("Base58 解码后不是有效 JSON 源配置", rawContent = decoded))
+            ?: Result.failure(SourceDataException("返回内容不是有效的视频源 JSON 配置", rawContent = content))
     }
 
-    private fun parseJson(content: String, format: String): VideoSiteImportResult? {
+    private fun parseJson(content: String): VideoSiteImportResult? {
         val root = runCatching {
             gson.fromJson(content, JsonObject::class.java)
         }.getOrNull() ?: return null
-        val apiSite = root.getAsJsonObject("api_site") ?: return null
-        val sites = apiSite.entrySet()
+        val sites = root.entrySet()
             .mapNotNull { entry ->
                 val item = entry.value.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
                 val apiUrl = item.get("api")?.asString?.trim().orEmpty()
@@ -88,41 +82,7 @@ class VideoSiteImportRepository @Inject constructor(
         return if (sites.isEmpty()) {
             null
         } else {
-            VideoSiteImportResult(sites = sites, format = format)
+            VideoSiteImportResult(sites = sites, format = "lite.json")
         }
-    }
-
-    private fun decodeBase58(value: String): String? {
-        var bytes = byteArrayOf(0)
-        value.forEach { char ->
-            val digit = BASE58_ALPHABET.indexOf(char)
-            if (digit < 0) return null
-            bytes = multiplyAndAdd(bytes, 58, digit)
-        }
-
-        val leadingZeroCount = value.takeWhile { it == BASE58_ALPHABET.first() }.length
-        val decoded = ByteArray(leadingZeroCount) + bytes.dropWhile { it == 0.toByte() }.toByteArray()
-        return decoded.toString(Charsets.UTF_8)
-    }
-
-    private fun multiplyAndAdd(input: ByteArray, multiplier: Int, addend: Int): ByteArray {
-        val result = input.copyOf()
-        var carry = addend
-        for (index in result.indices.reversed()) {
-            val value = (result[index].toInt() and 0xFF) * multiplier + carry
-            result[index] = value.toByte()
-            carry = value ushr 8
-        }
-
-        var prefix = byteArrayOf()
-        while (carry > 0) {
-            prefix = byteArrayOf(carry.toByte()) + prefix
-            carry = carry ushr 8
-        }
-        return prefix + result
-    }
-
-    private companion object {
-        const val BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     }
 }

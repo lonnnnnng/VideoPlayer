@@ -23,6 +23,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -57,6 +59,12 @@ import com.zy.player.ui.components.SourceEditorDialog
 import com.zy.player.ui.components.SourceCheckResultDialog
 import com.zy.player.ui.theme.AppColors
 import com.zy.player.ui.theme.Dimens
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private const val DEFAULT_VIDEO_SITE_IMPORT_URL =
+    "https://raw.githubusercontent.com/MayLabPro/VideoSource/main/lite.json"
 
 @Composable
 fun SiteManagementScreen(
@@ -172,6 +180,7 @@ fun SiteManagementScreen(
                             onMoveUp = { viewModel.moveSiteUp(site) },
                             onMoveDown = { viewModel.moveSiteDown(site) },
                             onCheck = { viewModel.checkSite(site) },
+                            onSetDefault = { viewModel.setDefaultSite(site) },
                             isChecking = checkingSiteId == site.id,
                             isCheckEnabled = !isBusy || checkingSiteId == site.id
                         )
@@ -259,6 +268,7 @@ private fun SiteItem(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onCheck: () -> Unit,
+    onSetDefault: () -> Unit,
     isChecking: Boolean,
     isCheckEnabled: Boolean
 ) {
@@ -311,13 +321,23 @@ private fun SiteItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "状态 ${site.lastCheckStatus}",
+                    text = formatSiteCheckStatus(site),
+                    modifier = Modifier.weight(1f),
                     color = if (site.enabled) AppColors.TextTertiary else AppColors.Error,
                     fontSize = 10.sp,
                     lineHeight = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    ManagementIconButton(
+                        icon = if (site.isDefault) Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = if (site.isDefault) "默认源" else "设为默认源",
+                        enabled = !site.isDefault,
+                        active = site.isDefault,
+                        onClick = onSetDefault
+                    )
                     ManagementIconButton(
                         icon = Icons.Default.CheckCircle,
                         contentDescription = "检测",
@@ -359,6 +379,7 @@ private fun ManagementIconButton(
     contentDescription: String,
     enabled: Boolean = true,
     isLoading: Boolean = false,
+    active: Boolean = false,
     onClick: () -> Unit
 ) {
     IconButton(
@@ -376,9 +397,45 @@ private fun ManagementIconButton(
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
-                tint = if (enabled) AppColors.TextPrimary else AppColors.TextTertiary,
+                tint = when {
+                    active -> AppColors.Primary
+                    enabled -> AppColors.TextPrimary
+                    else -> AppColors.TextTertiary
+                },
                 modifier = Modifier.size(17.dp)
             )
+        }
+    }
+}
+
+private fun formatSiteCheckStatus(site: VideoSiteEntity): String {
+    if (site.lastCheckTime <= 0L) {
+        return "未检测"
+    }
+    return listOfNotNull(
+        site.lastCheckStatus.toSiteStatusLabel(),
+        site.lastLatencyMs.takeIf { it > 0L }?.let { "${it}ms" },
+        formatCheckTime(site.lastCheckTime)
+    ).joinToString(" · ")
+}
+
+private fun String.toSiteStatusLabel(): String {
+    return when (this) {
+        "可用", "可播放" -> this
+        else -> "接口异常"
+    }
+}
+
+private fun formatCheckTime(timestamp: Long): String {
+    return SourceCheckTimeFormatter.get().format(Date(timestamp))
+}
+
+private object SourceCheckTimeFormatter {
+    private val formatter = ThreadLocal<SimpleDateFormat>()
+
+    fun get(): SimpleDateFormat {
+        return formatter.get() ?: SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).also {
+            formatter.set(it)
         }
     }
 }
@@ -421,7 +478,7 @@ private fun VideoSiteImportDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
-    var url by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf(DEFAULT_VIDEO_SITE_IMPORT_URL) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -432,7 +489,7 @@ private fun VideoSiteImportDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "支持 JSON 源配置和 Base58 编码配置。导入时会自动识别 api_site 结构，并跳过已存在的接口地址。",
+                    text = "支持 lite.json 视频源配置。导入时会读取每个源的 name 和 api 字段，并跳过已存在的接口地址。",
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
                     color = AppColors.TextSecondary
@@ -441,7 +498,7 @@ private fun VideoSiteImportDialog(
                     value = url,
                     onValueChange = { url = it },
                     label = { Text("配置地址") },
-                    placeholder = { Text("https://pz.v88.qzz.io/?format=0&source=jin18") },
+                    placeholder = { Text(DEFAULT_VIDEO_SITE_IMPORT_URL) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                     maxLines = 4,

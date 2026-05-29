@@ -17,7 +17,7 @@ import com.zy.player.data.local.entity.VideoSiteEntity
         HistoryEntity::class,
         LiveSourceEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -30,11 +30,11 @@ abstract class AppDatabase : RoomDatabase() {
             super.onCreate(db)
             // 插入默认视频源
             db.execSQL("""
-                INSERT INTO video_sites (name, apiUrl, enabled, sortOrder, lastCheckStatus, lastCheckTime)
+                INSERT INTO video_sites (name, apiUrl, enabled, sortOrder, lastCheckStatus, lastCheckTime, lastLatencyMs, isDefault)
                 VALUES
-                ('无尽资源', 'https://api.wujinapi.me/api.php/provide/vod/', 1, 1, '可播放', 0),
-                ('量子资源', 'https://cj.lziapi.com/api.php/provide/vod/', 1, 2, '未检测', 0),
-                ('非凡资源', 'https://cj.ffzyapi.com/api.php/provide/vod/', 1, 3, '未检测', 0)
+                ('无尽资源', 'https://api.wujinapi.me/api.php/provide/vod/', 1, 1, '可播放', 0, 0, 1),
+                ('量子资源', 'https://cj.lziapi.com/api.php/provide/vod/', 1, 2, '未检测', 0, 0, 0),
+                ('非凡资源', 'https://cj.ffzyapi.com/api.php/provide/vod/', 1, 3, '未检测', 0, 0, 0)
             """)
 
             // 插入默认直播源
@@ -102,6 +102,24 @@ abstract class AppDatabase : RoomDatabase() {
                     SET url = '${DefaultSources.DEFAULT_LIVE_SOURCE_URL}', lastCheckStatus = '未检测'
                     WHERE name = 'IPTV直播源'
                       AND url = '${DefaultSources.LEGACY_DEFAULT_LIVE_SOURCE_URL}'
+                """)
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE video_sites ADD COLUMN lastLatencyMs INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE video_sites ADD COLUMN isDefault INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("""
+                    UPDATE video_sites
+                    SET isDefault = 1
+                    WHERE id = (
+                        SELECT id
+                        FROM video_sites
+                        WHERE enabled = 1
+                        ORDER BY sortOrder ASC, id ASC
+                        LIMIT 1
+                    )
                 """)
             }
         }

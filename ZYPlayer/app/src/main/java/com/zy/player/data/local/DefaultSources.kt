@@ -15,7 +15,8 @@ object DefaultSources {
             apiUrl = "https://api.wujinapi.me/api.php/provide/vod/",
             enabled = true,
             sortOrder = 1,
-            lastCheckStatus = "可播放"
+            lastCheckStatus = "可播放",
+            isDefault = true
         ),
         VideoSiteEntity(
             name = "量子资源",

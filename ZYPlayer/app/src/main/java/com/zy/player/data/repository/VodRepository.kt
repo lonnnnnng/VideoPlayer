@@ -5,6 +5,7 @@ import com.google.gson.Gson
 import com.zy.player.data.remote.VodApiResponse
 import com.zy.player.data.remote.VodApiService
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
@@ -12,6 +13,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
+import java.io.InterruptedIOException
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,6 +28,7 @@ class VodRepository @Inject constructor(
     companion object {
         private const val TAG = "VodRepository"
         private const val REQUEST_TIMEOUT_MS = 5_000L
+        const val VIDEO_SITE_CHECK_TIMEOUT_MS = 10_000L
         private const val CACHE_TTL_MS = 2 * 60 * 1_000L
     }
 
@@ -115,140 +120,161 @@ class VodRepository @Inject constructor(
         }
     }
 
-    suspend fun checkVideoSite(baseUrl: String): Result<VideoSiteCheckResponse> = withContext(Dispatchers.IO) {
+    suspend fun checkVideoSite(
+        baseUrl: String,
+        timeoutMs: Long = VIDEO_SITE_CHECK_TIMEOUT_MS
+    ): Result<VideoSiteCheckResponse> = withContext(Dispatchers.IO) {
         try {
-            val normalizedBaseUrl = baseUrl.trim()
-            val checkUrl = buildString {
-                append(normalizedBaseUrl)
-                append(if (normalizedBaseUrl.contains("?")) "&" else "?")
-                append("ac=videolist&pg=1")
-            }
-            val request = Request.Builder()
-                .url(checkUrl)
-                .header("User-Agent", "Mozilla/5.0 ZYPlayer")
-                .build()
-            okHttpClient.newCall(request).execute().use { response ->
-                val content = response.body?.string().orEmpty()
-
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(
-                        SourceHttpException(
-                            statusCode = response.code,
-                            message = "HTTP ${response.code}",
-                            rawContent = content
-                        )
-                    )
-                }
-
-                if (content.isBlank()) {
-                    return@withContext Result.failure(
-                        SourceDataException("接口返回内容为空", rawContent = content)
-                    )
-                }
-
-                val apiResponse = try {
-                    gson.fromJson(content, VodApiResponse::class.java)
-                } catch (e: Exception) {
-                    return@withContext Result.failure(
-                        SourceDataException(
-                            message = "接口返回内容不是有效 JSON",
-                            rawContent = content,
-                            cause = e
-                        )
-                    )
-                } ?: return@withContext Result.failure(
-                    SourceDataException("接口返回内容不是有效 JSON", rawContent = content)
-                )
-                val hasList = !apiResponse.list.isNullOrEmpty()
-                val hasClass = !apiResponse.`class`.isNullOrEmpty()
-                val hasMeta = apiResponse.code != null || apiResponse.total != null || apiResponse.page != null
-                if (!hasList && !hasClass && !hasMeta) {
-                    return@withContext Result.failure(
-                        SourceDataException(
-                            message = "接口返回 JSON 不包含影视列表、分类或分页字段",
-                            rawContent = content
-                        )
-                    )
-                }
-                if (!hasList) {
-                    return@withContext Result.failure(
-                        SourceDataException(
-                            message = "接口第一页没有返回影片列表，无法验证搜索能力",
-                            rawContent = content
-                        )
-                    )
-                }
-
-                val searchKeyword = apiResponse.list
-                    .orEmpty()
-                    .mapNotNull { it.vod_name.takeIf { name -> name.isNotBlank() } }
-                    .firstOrNull()
-                    ?: return@withContext Result.failure(
-                        SourceDataException(
-                            message = "接口第一页没有可用于搜索验证的影片名称",
-                            rawContent = content
-                        )
-                    )
-                var searchResultCount: Int
-                val searchUrl = buildString {
+            withTimeout(timeoutMs.milliseconds) {
+                val startedAt = System.currentTimeMillis()
+                val normalizedBaseUrl = baseUrl.trim()
+                val checkUrl = buildString {
                     append(normalizedBaseUrl)
                     append(if (normalizedBaseUrl.contains("?")) "&" else "?")
-                    append("ac=videolist&pg=1&wd=")
-                    append(java.net.URLEncoder.encode(searchKeyword, "UTF-8"))
+                    append("ac=videolist&pg=1")
                 }
-                val searchRequest = Request.Builder()
-                    .url(searchUrl)
+                val request = Request.Builder()
+                    .url(checkUrl)
                     .header("User-Agent", "Mozilla/5.0 ZYPlayer")
                     .build()
-                okHttpClient.newCall(searchRequest).execute().use { searchResponse ->
-                    val searchContent = searchResponse.body?.string().orEmpty()
-                    if (!searchResponse.isSuccessful) {
-                        return@withContext Result.failure(
+                executeCheckRequest(request, startedAt, timeoutMs).use { response ->
+                    val content = response.body?.string().orEmpty()
+
+                    if (!response.isSuccessful) {
+                        return@withTimeout Result.failure(
                             SourceHttpException(
-                                statusCode = searchResponse.code,
-                                message = "搜索接口 HTTP ${searchResponse.code}",
-                                rawContent = searchContent
+                                statusCode = response.code,
+                                message = "HTTP ${response.code}",
+                                rawContent = content
                             )
                         )
                     }
-                    val searchApiResponse = try {
-                        gson.fromJson(searchContent, VodApiResponse::class.java)
+
+                    if (content.isBlank()) {
+                        return@withTimeout Result.failure(
+                            SourceDataException("接口返回内容为空", rawContent = content)
+                        )
+                    }
+
+                    val apiResponse = try {
+                        gson.fromJson(content, VodApiResponse::class.java)
                     } catch (e: Exception) {
-                        return@withContext Result.failure(
+                        return@withTimeout Result.failure(
                             SourceDataException(
-                                message = "搜索接口返回内容不是有效 JSON",
-                                rawContent = searchContent,
+                                message = "接口返回内容不是有效 JSON",
+                                rawContent = content,
                                 cause = e
                             )
                         )
-                    } ?: return@withContext Result.failure(
-                        SourceDataException("搜索接口返回内容不是有效 JSON", rawContent = searchContent)
+                    } ?: return@withTimeout Result.failure(
+                        SourceDataException("接口返回内容不是有效 JSON", rawContent = content)
                     )
-                    searchResultCount = searchApiResponse.list.orEmpty().size
-                    if (searchResultCount == 0) {
-                        return@withContext Result.failure(
+                    val hasList = !apiResponse.list.isNullOrEmpty()
+                    val hasClass = !apiResponse.`class`.isNullOrEmpty()
+                    val hasMeta = apiResponse.code != null || apiResponse.total != null || apiResponse.page != null
+                    if (!hasList && !hasClass && !hasMeta) {
+                        return@withTimeout Result.failure(
                             SourceDataException(
-                                message = "搜索接口没有返回影片列表",
-                                rawContent = searchContent
+                                message = "接口返回 JSON 不包含影视列表、分类或分页字段",
+                                rawContent = content
                             )
                         )
                     }
-                }
+                    if (!hasList) {
+                        return@withTimeout Result.failure(
+                            SourceDataException(
+                                message = "接口第一页没有返回影片列表，无法验证搜索能力",
+                                rawContent = content
+                            )
+                        )
+                    }
 
-                Result.success(
-                    VideoSiteCheckResponse(
-                        httpCode = response.code,
-                        contentType = response.header("Content-Type"),
-                        rawContent = content,
-                        response = apiResponse,
-                        searchKeyword = searchKeyword,
-                        searchResultCount = searchResultCount
+                    val searchKeyword = apiResponse.list
+                        .orEmpty()
+                        .mapNotNull { it.vod_name.takeIf { name -> name.isNotBlank() } }
+                        .firstOrNull()
+                        ?: return@withTimeout Result.failure(
+                            SourceDataException(
+                                message = "接口第一页没有可用于搜索验证的影片名称",
+                                rawContent = content
+                            )
+                        )
+                    var searchResultCount: Int
+                    val searchUrl = buildString {
+                        append(normalizedBaseUrl)
+                        append(if (normalizedBaseUrl.contains("?")) "&" else "?")
+                        append("ac=videolist&pg=1&wd=")
+                        append(java.net.URLEncoder.encode(searchKeyword, "UTF-8"))
+                    }
+                    val searchRequest = Request.Builder()
+                        .url(searchUrl)
+                        .header("User-Agent", "Mozilla/5.0 ZYPlayer")
+                        .build()
+                    executeCheckRequest(searchRequest, startedAt, timeoutMs).use { searchResponse ->
+                        val searchContent = searchResponse.body?.string().orEmpty()
+                        if (!searchResponse.isSuccessful) {
+                            return@withTimeout Result.failure(
+                                SourceHttpException(
+                                    statusCode = searchResponse.code,
+                                    message = "搜索接口 HTTP ${searchResponse.code}",
+                                    rawContent = searchContent
+                                )
+                            )
+                        }
+                        val searchApiResponse = try {
+                            gson.fromJson(searchContent, VodApiResponse::class.java)
+                        } catch (e: Exception) {
+                            return@withTimeout Result.failure(
+                                SourceDataException(
+                                    message = "搜索接口返回内容不是有效 JSON",
+                                    rawContent = searchContent,
+                                    cause = e
+                                )
+                            )
+                        } ?: return@withTimeout Result.failure(
+                            SourceDataException("搜索接口返回内容不是有效 JSON", rawContent = searchContent)
+                        )
+                        searchResultCount = searchApiResponse.list.orEmpty().size
+                        if (searchResultCount == 0) {
+                            return@withTimeout Result.failure(
+                                SourceDataException(
+                                    message = "搜索接口没有返回影片列表",
+                                    rawContent = searchContent
+                                )
+                            )
+                        }
+                    }
+
+                    Result.success(
+                        VideoSiteCheckResponse(
+                            httpCode = response.code,
+                            contentType = response.header("Content-Type"),
+                            rawContent = content,
+                            response = apiResponse,
+                            searchKeyword = searchKeyword,
+                            searchResultCount = searchResultCount,
+                            latencyMs = (System.currentTimeMillis() - startedAt).coerceAtLeast(1L)
+                        )
                     )
-                )
+                }
             }
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun executeCheckRequest(
+        request: Request,
+        startedAt: Long,
+        timeoutMs: Long
+    ): Response {
+        val remainingMs = timeoutMs - (System.currentTimeMillis() - startedAt)
+        if (remainingMs <= 0L) {
+            throw InterruptedIOException("检测超时")
+        }
+        return okHttpClient.newCall(request).apply {
+            timeout().timeout(remainingMs, TimeUnit.MILLISECONDS)
+        }.execute()
     }
 
     private suspend fun executeWithCache(

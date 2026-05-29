@@ -9,7 +9,7 @@ interface VideoSiteDao {
     @Query("SELECT * FROM video_sites ORDER BY sortOrder ASC, id ASC")
     fun observeAll(): Flow<List<VideoSiteEntity>>
 
-    @Query("SELECT * FROM video_sites WHERE enabled = 1 ORDER BY sortOrder ASC, id ASC")
+    @Query("SELECT * FROM video_sites WHERE enabled = 1 ORDER BY isDefault DESC, sortOrder ASC, id ASC")
     suspend fun getEnabled(): List<VideoSiteEntity>
 
     @Query("SELECT * FROM video_sites ORDER BY sortOrder ASC, id ASC")
@@ -23,6 +23,12 @@ interface VideoSiteDao {
 
     @Update
     suspend fun update(site: VideoSiteEntity)
+
+    @Update
+    suspend fun updateAll(sites: List<VideoSiteEntity>)
+
+    @Query("UPDATE video_sites SET isDefault = CASE WHEN id = :siteId THEN 1 ELSE 0 END, enabled = CASE WHEN id = :siteId THEN 1 ELSE enabled END")
+    suspend fun setDefault(siteId: Long)
 
     @Delete
     suspend fun delete(site: VideoSiteEntity)
