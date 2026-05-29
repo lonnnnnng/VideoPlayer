@@ -35,7 +35,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -171,8 +170,8 @@ private fun LiveSourceItem(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = Color.White.copy(alpha = 0.045f),
-        shape = RoundedCornerShape(8.dp),
+        color = AppColors.Surface,
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Column(

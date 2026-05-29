@@ -19,8 +19,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,8 +79,8 @@ fun SourceCheckResultDialog(
                     } else {
                         AppColors.Error.copy(alpha = 0.10f)
                     },
-                    contentColor = AppColors.TextPrimary,
-                    shape = RoundedCornerShape(8.dp),
+                    contentColor = if (state.success) AppColors.Primary else AppColors.Error,
+                    shape = RoundedCornerShape(4.dp),
                     border = BorderStroke(
                         1.dp,
                         if (state.success) {
@@ -126,15 +124,14 @@ fun SourceCheckResultDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(
-                                        color = Color.Black.copy(alpha = 0.26f),
-                                        shape = RoundedCornerShape(8.dp)
+                                        color = AppColors.SurfaceAlt,
+                                        shape = RoundedCornerShape(4.dp)
                                     )
-                                    .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+                                    .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
                                     .padding(12.dp),
                                 color = AppColors.TextSecondary,
                                 fontSize = 11.sp,
-                                lineHeight = 16.sp,
-                                fontFamily = FontFamily.Monospace
+                                lineHeight = 16.sp
                             )
                         }
                     }
@@ -154,8 +151,8 @@ private fun SourceCheckSummaryRow(item: SourceCheckSummaryItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.035f), RoundedCornerShape(8.dp))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+            .background(AppColors.SurfaceAlt, RoundedCornerShape(4.dp))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
             .padding(horizontal = 11.dp, vertical = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {

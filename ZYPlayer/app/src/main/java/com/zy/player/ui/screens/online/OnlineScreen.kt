@@ -123,9 +123,9 @@ private fun OnlineIntroCopy() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.White.copy(alpha = 0.045f))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(4.dp))
+            .background(AppColors.Surface)
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -171,12 +171,12 @@ private fun OnlineInputField(
         singleLine = false,
         minLines = 4,
         maxLines = 6,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(4.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = AppColors.TextPrimary,
             unfocusedTextColor = AppColors.TextPrimary,
-            focusedContainerColor = Color.White.copy(alpha = 0.045f),
-            unfocusedContainerColor = Color.White.copy(alpha = 0.045f),
+            focusedContainerColor = AppColors.Surface,
+            unfocusedContainerColor = AppColors.Surface,
             focusedBorderColor = AppColors.Primary,
             unfocusedBorderColor = AppColors.Divider,
             cursorColor = AppColors.Primary,
@@ -200,9 +200,9 @@ private fun OnlineActionButton(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp),
-        color = if (enabled && !isLoading) AppColors.Primary else Color.White.copy(alpha = 0.06f),
-        contentColor = if (enabled && !isLoading) AppColors.TextPrimary else AppColors.TextTertiary,
-        shape = RoundedCornerShape(8.dp),
+        color = if (enabled && !isLoading) AppColors.Primary else AppColors.SurfaceRaised,
+        contentColor = if (enabled && !isLoading) AppColors.OnPrimary else AppColors.TextTertiary,
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, if (enabled && !isLoading) Color.Transparent else AppColors.Divider)
     ) {
         Row(
@@ -233,9 +233,9 @@ private fun OnlineParseResultPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(AppColors.Surface.copy(alpha = 0.78f))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(4.dp))
+            .background(AppColors.Surface)
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -268,9 +268,9 @@ private fun OnlineChannelRow(
         modifier = Modifier
             .fillMaxWidth()
             .height(54.dp),
-        color = Color.White.copy(alpha = 0.045f),
+        color = AppColors.SurfaceAlt,
         contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Row(

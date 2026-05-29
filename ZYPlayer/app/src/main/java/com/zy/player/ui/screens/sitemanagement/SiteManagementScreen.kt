@@ -45,7 +45,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -274,8 +273,8 @@ private fun SiteItem(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = Color.White.copy(alpha = 0.045f),
-        shape = RoundedCornerShape(8.dp),
+        color = AppColors.Surface,
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Column(
@@ -449,8 +448,8 @@ private fun ManagementStatusBanner(
     Surface(
         modifier = modifier,
         color = AppColors.Primary.copy(alpha = 0.10f),
-        contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(8.dp),
+        contentColor = AppColors.Primary,
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, AppColors.Primary.copy(alpha = 0.24f))
     ) {
         Row(
@@ -502,12 +501,12 @@ private fun VideoSiteImportDialog(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                     maxLines = 4,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(4.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = AppColors.TextPrimary,
                         unfocusedTextColor = AppColors.TextPrimary,
-                        focusedContainerColor = Color.White.copy(alpha = 0.045f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.045f),
+                        focusedContainerColor = AppColors.SurfaceAlt,
+                        unfocusedContainerColor = AppColors.SurfaceAlt,
                         focusedBorderColor = AppColors.Primary,
                         unfocusedBorderColor = AppColors.Divider,
                         cursorColor = AppColors.Primary,
@@ -523,15 +522,15 @@ private fun VideoSiteImportDialog(
                 enabled = url.isNotBlank() && !isImporting,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AppColors.Primary,
-                    contentColor = AppColors.Background,
-                    disabledContainerColor = Color.White.copy(alpha = 0.08f),
+                    contentColor = AppColors.OnPrimary,
+                    disabledContainerColor = AppColors.SurfaceRaised,
                     disabledContentColor = AppColors.TextTertiary
                 )
             ) {
                 if (isImporting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
-                        color = AppColors.Background,
+                        color = AppColors.OnPrimary,
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(8.dp))

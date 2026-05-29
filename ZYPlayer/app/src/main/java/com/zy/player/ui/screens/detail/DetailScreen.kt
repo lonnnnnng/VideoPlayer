@@ -195,16 +195,16 @@ private fun DetailOverviewCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(4.dp))
             .background(
                 Brush.linearGradient(
                     listOf(
-                        Color.White.copy(alpha = 0.055f),
-                        AppColors.Surface.copy(alpha = 0.82f)
+                        AppColors.Surface,
+                        AppColors.SurfaceSoft
                     )
                 )
             )
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
             .padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(13.dp)
     ) {
@@ -212,9 +212,9 @@ private fun DetailOverviewCard(
             modifier = Modifier
                 .width(116.dp)
                 .height(184.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(4.dp))
                 .background(AppColors.SurfaceAlt)
-                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
         ) {
             NetworkImage(
                 url = source.vodDetail.vod_pic,
@@ -318,9 +318,9 @@ private fun DetailMetaLine(items: List<String>) {
             Text(
                 text = item,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(Color.White.copy(alpha = 0.08f))
-                    .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(AppColors.SurfaceAlt)
+                    .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
                     .padding(horizontal = 8.dp, vertical = 5.dp),
                 color = AppColors.TextPrimary.copy(alpha = 0.82f),
                 fontSize = 11.sp,
@@ -369,8 +369,8 @@ private fun DetailChoicePill(
     Surface(
         onClick = onClick,
         color = Color.Transparent,
-        contentColor = if (selected) AppColors.Background else AppColors.TextSecondary,
-        shape = RoundedCornerShape(8.dp),
+        contentColor = if (selected) AppColors.OnPrimary else AppColors.TextSecondary,
+        shape = RoundedCornerShape(4.dp),
         border = if (selected) null else BorderStroke(1.dp, AppColors.Divider)
     ) {
         Row(
@@ -383,8 +383,8 @@ private fun DetailChoicePill(
                     } else {
                         Brush.linearGradient(
                             listOf(
-                                Color.White.copy(alpha = 0.04f),
-                                Color.White.copy(alpha = 0.035f)
+                                AppColors.Surface,
+                                AppColors.SurfaceAlt
                             )
                         )
                     }
@@ -396,7 +396,7 @@ private fun DetailChoicePill(
             Text(
                 text = title,
                 modifier = Modifier.weight(1f, fill = false),
-                color = if (selected) AppColors.TextPrimary else AppColors.TextPrimary,
+                color = if (selected) AppColors.OnPrimary else AppColors.TextPrimary,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Black,
                 maxLines = 1,
@@ -404,7 +404,7 @@ private fun DetailChoicePill(
             )
             Text(
                 text = meta,
-                color = if (selected) AppColors.TextPrimary else AppColors.TextTertiary,
+                color = if (selected) AppColors.OnPrimary.copy(alpha = 0.82f) else AppColors.TextTertiary,
                 fontSize = 9.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -430,9 +430,9 @@ private fun DetailEpisodesSection(
                 text = "当前线路暂无可播放剧集",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.White.copy(alpha = 0.04f))
-                    .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(AppColors.Surface)
+                    .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
                     .padding(14.dp),
                 color = AppColors.TextTertiary,
                 fontSize = 12.sp
@@ -471,7 +471,7 @@ private fun DetailEpisodeButton(
         modifier = modifier.height(30.dp),
         color = Color.Transparent,
         contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Box(
@@ -480,8 +480,8 @@ private fun DetailEpisodeButton(
                 .background(
                     Brush.linearGradient(
                         listOf(
-                            Color.White.copy(alpha = 0.045f),
-                            Color.White.copy(alpha = 0.035f)
+                            AppColors.Surface,
+                            AppColors.SurfaceAlt
                         )
                     )
                 )
@@ -536,10 +536,10 @@ private fun DetailSmallIconButton(
 ) {
     Surface(
         onClick = onClick,
-        color = Color.White.copy(alpha = 0.08f),
+        color = AppColors.Surface,
         contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+        shape = RoundedCornerShape(4.dp),
+        border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Box(
             modifier = Modifier.size(40.dp),

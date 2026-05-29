@@ -51,7 +51,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -59,7 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zy.player.ui.theme.AppColors
 
-private val CinemaShape = RoundedCornerShape(8.dp)
+private val CinemaShape = RoundedCornerShape(4.dp)
 
 @Composable
 fun CinemaBackground(
@@ -71,9 +70,9 @@ fun CinemaBackground(
             .background(
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color(0xFF08090D),
+                        Color(0xFFFDFEFF),
                         AppColors.Background,
-                        AppColors.Background
+                        AppColors.Shell
                     )
                 )
             )
@@ -111,8 +110,7 @@ fun CinemaTopBar(
                 color = AppColors.TextPrimary,
                 fontSize = 22.sp,
                 lineHeight = 26.sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Default
+                fontWeight = FontWeight.Black
             )
         }
 
@@ -135,9 +133,9 @@ fun CinemaIconButton(
         onClick = onClick,
         modifier = modifier
             .size(44.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.White.copy(alpha = 0.045f))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(4.dp))
+            .background(AppColors.Surface)
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
     ) {
         Icon(
             imageVector = icon,
@@ -262,9 +260,9 @@ private fun CinemaSearchSurface(
         modifier = modifier
             .padding(horizontal = horizontalPadding)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.White.copy(alpha = 0.045f))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(4.dp))
+            .background(AppColors.Surface)
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 12.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -290,7 +288,7 @@ fun CinemaGlassCard(
         modifier = modifier
             .clip(CinemaShape)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        color = Color.White.copy(alpha = 0.045f),
+        color = AppColors.Surface,
         shape = CinemaShape,
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
@@ -306,15 +304,15 @@ fun CinemaMiniPlayButton(
     Box(
         modifier = modifier
             .size(42.dp)
-            .clip(CircleShape)
-            .background(AppColors.TextPrimary)
+            .clip(CinemaShape)
+            .background(AppColors.Primary)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Icons.Default.PlayArrow,
             contentDescription = "播放",
-            tint = AppColors.Background,
+            tint = AppColors.OnPrimary,
             modifier = Modifier.size(27.dp)
         )
     }
@@ -499,9 +497,9 @@ fun CinemaMessage(
                 Spacer(modifier = Modifier.height(4.dp))
                 Surface(
                     onClick = onAction,
-                    color = AppColors.TextPrimary,
-                    contentColor = AppColors.Background,
-                    shape = RoundedCornerShape(999.dp)
+                    color = AppColors.Primary,
+                    contentColor = AppColors.OnPrimary,
+                    shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
                         text = actionText,

@@ -9,7 +9,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,7 +32,7 @@ fun SourceEditorDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(Dimens.paddingMedium),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(4.dp),
             colors = CardDefaults.cardColors(containerColor = AppColors.Surface),
             border = BorderStroke(1.dp, AppColors.Divider)
         ) {
@@ -57,7 +56,7 @@ fun SourceEditorDialog(
                     label = { Text("名称") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(4.dp),
                     colors = editorTextFieldColors()
                 )
 
@@ -70,7 +69,7 @@ fun SourceEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                     maxLines = 5,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(4.dp),
                     colors = editorTextFieldColors()
                 )
 
@@ -93,8 +92,8 @@ fun SourceEditorDialog(
                         enabled = name.isNotBlank() && url.isNotBlank(),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AppColors.Primary,
-                            contentColor = AppColors.Background,
-                            disabledContainerColor = Color.White.copy(alpha = 0.08f),
+                            contentColor = AppColors.OnPrimary,
+                            disabledContainerColor = AppColors.SurfaceRaised,
                             disabledContentColor = AppColors.TextTertiary
                         )
                     ) {
@@ -110,8 +109,8 @@ fun SourceEditorDialog(
 private fun editorTextFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = AppColors.TextPrimary,
     unfocusedTextColor = AppColors.TextPrimary,
-    focusedContainerColor = Color.White.copy(alpha = 0.045f),
-    unfocusedContainerColor = Color.White.copy(alpha = 0.045f),
+    focusedContainerColor = AppColors.SurfaceAlt,
+    unfocusedContainerColor = AppColors.SurfaceAlt,
     focusedBorderColor = AppColors.Primary,
     unfocusedBorderColor = AppColors.Divider,
     cursorColor = AppColors.Primary,

@@ -56,8 +56,8 @@ private fun ImageFallback(title: String?) {
                 Brush.linearGradient(
                     listOf(
                         AppColors.SurfaceAlt,
-                        Color(0xFF0D1516),
-                        AppColors.Primary.copy(alpha = 0.16f)
+                        AppColors.SurfaceRaised,
+                        AppColors.Primary.copy(alpha = 0.10f)
                     )
                 )
             )

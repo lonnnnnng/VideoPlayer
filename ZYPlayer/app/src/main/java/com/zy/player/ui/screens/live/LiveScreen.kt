@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
@@ -38,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -87,8 +85,7 @@ fun LiveScreen(
                     ) {
                         LiveSearchRow(
                             searchQuery = searchQuery,
-                            onSearchChange = viewModel::setSearchQuery,
-                            onSourceClick = { showSourceSelector = true }
+                            onSearchChange = viewModel::setSearchQuery
                         )
 
                         SourceTabs(
@@ -174,39 +171,21 @@ fun LiveScreen(
 @Composable
 private fun LiveSearchRow(
     searchQuery: String,
-    onSearchChange: (String) -> Unit,
-    onSourceClick: () -> Unit
+    onSearchChange: (String) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 0.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         CinemaSearchInput(
             value = searchQuery,
             placeholder = "搜索频道",
             onValueChange = onSearchChange,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.fillMaxWidth(),
             horizontalPadding = 0.dp
         )
-        Surface(
-            onClick = onSourceClick,
-            modifier = Modifier.size(48.dp),
-            color = Color.White.copy(alpha = 0.045f),
-            contentColor = AppColors.TextPrimary,
-            shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(1.dp, AppColors.Divider)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Default.Link,
-                    contentDescription = "切换直播源",
-                    modifier = Modifier.size(21.dp)
-                )
-            }
-        }
     }
 }
 
@@ -218,8 +197,8 @@ private fun LiveSourceChip(
     Surface(
         onClick = onClick,
         color = AppColors.PrimaryLight,
-        contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(8.dp),
+        contentColor = AppColors.Primary,
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, AppColors.Primary.copy(alpha = 0.42f)),
         modifier = Modifier.width(70.dp)
     ) {
@@ -231,7 +210,7 @@ private fun LiveSourceChip(
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "切换直播源：$sourceName",
-                tint = AppColors.TextPrimary,
+                tint = AppColors.Primary,
                 modifier = Modifier.size(15.dp)
             )
             Text(
@@ -296,9 +275,9 @@ private fun SourceTabChip(
 ) {
     Surface(
         onClick = onClick,
-        color = if (active) AppColors.Primary else Color.White.copy(alpha = 0.04f),
-        contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(8.dp),
+        color = if (active) AppColors.Primary else AppColors.Surface,
+        contentColor = if (active) AppColors.OnPrimary else AppColors.TextPrimary,
+        shape = RoundedCornerShape(4.dp),
         border = if (active) null else BorderStroke(1.dp, AppColors.Divider)
     ) {
         Text(
@@ -320,9 +299,9 @@ private fun ChannelRow(
         modifier = Modifier
             .padding(horizontal = 18.dp, vertical = 4.5.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.White.copy(alpha = 0.035f))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(4.dp))
+            .background(AppColors.Surface)
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 13.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -330,13 +309,13 @@ private fun ChannelRow(
         Box(
             modifier = Modifier
                 .size(42.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(4.dp))
                 .background(AppColors.PrimaryLight),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = channel.name.filter { it.isDigit() }.take(2).ifBlank { channel.name.take(1) },
-                color = AppColors.TextPrimary,
+                color = AppColors.Primary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Black
             )

@@ -38,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -172,9 +171,9 @@ private fun EpisodeSourcePicker(
                 val selected = option.key == selectedKey
                 Surface(
                     onClick = { onSourceSelect(option.key) },
-                    color = if (selected) AppColors.Primary else Color.White.copy(alpha = 0.035f),
-                    contentColor = if (selected) AppColors.Background else AppColors.TextSecondary,
-                    shape = RoundedCornerShape(999.dp),
+                    color = if (selected) AppColors.Primary else AppColors.Surface,
+                    contentColor = if (selected) AppColors.OnPrimary else AppColors.TextSecondary,
+                    shape = RoundedCornerShape(4.dp),
                     border = if (selected) null else BorderStroke(1.dp, AppColors.Divider)
                 ) {
                     Text(
@@ -226,7 +225,6 @@ private fun EpisodeTopBar(
                 fontSize = 31.sp,
                 lineHeight = 34.sp,
                 fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Serif,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -281,9 +279,9 @@ private fun EpisodeTab(
 ) {
     Surface(
         onClick = onClick,
-        color = if (active) AppColors.Primary else Color.White.copy(alpha = 0.035f),
-        contentColor = if (active) AppColors.Background else AppColors.TextSecondary,
-        shape = RoundedCornerShape(999.dp),
+        color = if (active) AppColors.Primary else AppColors.Surface,
+        contentColor = if (active) AppColors.OnPrimary else AppColors.TextSecondary,
+        shape = RoundedCornerShape(4.dp),
         border = if (active) null else BorderStroke(1.dp, AppColors.Divider)
     ) {
         Text(
@@ -302,16 +300,16 @@ private fun EpisodeResumeNote(label: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(4.dp))
             .background(
                 Brush.linearGradient(
                     listOf(
                         AppColors.Primary.copy(alpha = 0.11f),
-                        Color.White.copy(alpha = 0.04f)
+                        AppColors.Surface
                     )
                 )
             )
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -378,8 +376,8 @@ private fun EpisodeGrid(
             Surface(
                 onClick = { onEpisodeClick(episode) },
                 color = Color.Transparent,
-                contentColor = if (active) AppColors.Background else AppColors.TextPrimary,
-                shape = RoundedCornerShape(8.dp),
+                contentColor = if (active) AppColors.OnPrimary else AppColors.TextPrimary,
+                shape = RoundedCornerShape(4.dp),
                 border = if (active) null else BorderStroke(1.dp, AppColors.Divider)
             ) {
                 Column(
@@ -392,13 +390,13 @@ private fun EpisodeGrid(
                                 watched -> Brush.linearGradient(
                                     listOf(
                                         AppColors.Primary.copy(alpha = 0.12f),
-                                        Color.White.copy(alpha = 0.04f)
+                                        AppColors.Surface
                                     )
                                 )
                                 else -> Brush.linearGradient(
                                     listOf(
-                                        Color.White.copy(alpha = 0.04f),
-                                        Color.White.copy(alpha = 0.04f)
+                                        AppColors.Surface,
+                                        AppColors.SurfaceAlt
                                     )
                                 )
                             }
@@ -408,7 +406,7 @@ private fun EpisodeGrid(
                 ) {
                     Text(
                         text = normalizeEpisodeLabel(episode.label, index),
-                        color = if (active) AppColors.Background else AppColors.TextPrimary,
+                        color = if (active) AppColors.OnPrimary else AppColors.TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Black,
                         maxLines = 1,
@@ -420,7 +418,7 @@ private fun EpisodeGrid(
                             watched -> "已看完"
                             else -> "未播放"
                         },
-                        color = if (active) AppColors.Background else AppColors.TextTertiary,
+                        color = if (active) AppColors.OnPrimary.copy(alpha = 0.82f) else AppColors.TextTertiary,
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -439,9 +437,9 @@ private fun EpisodeIconButton(
 ) {
     Surface(
         onClick = onClick,
-        color = Color.White.copy(alpha = 0.045f),
+        color = AppColors.Surface,
         contentColor = AppColors.TextPrimary,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Box(

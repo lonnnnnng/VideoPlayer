@@ -35,7 +35,7 @@ fun VodCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(Dimens.radiusMedium),
         colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.045f)
+            containerColor = AppColors.Surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -61,14 +61,14 @@ fun VodCard(
                             .align(Alignment.TopEnd)
                             .padding(Dimens.paddingSmall)
                             .background(
-                                color = Color(0xFFFF6B6B),
+                                color = AppColors.Primary,
                                 shape = RoundedCornerShape(Dimens.radiusSmall)
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = remark,
-                            color = Color.White,
+                            color = AppColors.OnPrimary,
                             fontSize = 10.sp
                         )
                     }
@@ -102,7 +102,7 @@ fun VodCard(
                             end = Dimens.paddingSmall,
                             bottom = Dimens.paddingSmall
                         )
-                        .clip(RoundedCornerShape(999.dp))
+                        .clip(RoundedCornerShape(4.dp))
                         .background(AppColors.PrimaryLight)
                         .padding(horizontal = 7.dp, vertical = 3.dp),
                     fontSize = 10.sp,

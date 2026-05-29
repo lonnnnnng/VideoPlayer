@@ -105,9 +105,9 @@ fun SearchScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.White.copy(alpha = 0.04f))
-                                .border(BorderStroke(1.dp, AppColors.Divider), RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(AppColors.Surface)
+                                .border(BorderStroke(1.dp, AppColors.Divider), RoundedCornerShape(4.dp))
                                 .clickable {
                                     searchText = keyword
                                     submitSearch(keyword)
@@ -148,9 +148,9 @@ private fun SearchPrimaryButton(
             .fillMaxWidth()
             .height(52.dp)
             .padding(horizontal = 18.dp),
-        color = if (enabled) AppColors.Primary else Color.White.copy(alpha = 0.06f),
-        contentColor = if (enabled) AppColors.Background else AppColors.TextTertiary,
-        shape = RoundedCornerShape(8.dp),
+        color = if (enabled) AppColors.Primary else AppColors.SurfaceRaised,
+        contentColor = if (enabled) AppColors.OnPrimary else AppColors.TextTertiary,
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, if (enabled) Color.Transparent else AppColors.Divider)
     ) {
         Row(

@@ -45,7 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -313,9 +312,9 @@ private fun SettingsGroup(content: @Composable () -> Unit) {
         modifier = Modifier
             .padding(vertical = 0.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color.White.copy(alpha = 0.04f))
-            .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(4.dp))
+            .background(AppColors.Surface)
+            .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
     ) {
         content()
     }
@@ -364,14 +363,14 @@ private fun SettingsItem(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(4.dp))
                     .background(AppColors.PrimaryLight),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = AppColors.TextPrimary,
+                    tint = AppColors.Primary,
                     modifier = Modifier.size(21.dp)
                 )
             }

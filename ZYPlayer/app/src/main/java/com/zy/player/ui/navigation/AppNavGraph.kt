@@ -369,7 +369,7 @@ private fun FloatingCinemaNavigationBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(AppColors.Shell.copy(alpha = 0.98f))
-            .border(1.dp, Color.White.copy(alpha = 0.08f))
+            .border(1.dp, AppColors.Divider)
             .navigationBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
     ) {
@@ -387,8 +387,8 @@ private fun FloatingCinemaNavigationBar(
                         .weight(1f)
                         .fillMaxHeight(),
                     color = if (selected) AppColors.PrimaryLight else Color.Transparent,
-                    contentColor = if (selected) AppColors.TextPrimary else AppColors.TextTertiary,
-                    shape = RoundedCornerShape(8.dp)
+                    contentColor = if (selected) AppColors.Primary else AppColors.TextTertiary,
+                    shape = RoundedCornerShape(4.dp)
                 ) {
                     Column(
                         modifier = Modifier.fillMaxSize(),

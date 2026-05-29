@@ -31,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -138,10 +137,10 @@ private fun HistoryItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(4.dp))
             .clickable(onClick = onClick),
-        color = Color.White.copy(alpha = 0.045f),
-        shape = RoundedCornerShape(8.dp),
+        color = AppColors.Surface,
+        shape = RoundedCornerShape(4.dp),
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Row(
@@ -154,7 +153,7 @@ private fun HistoryItem(
                 modifier = Modifier
                     .width(92.dp)
                     .height(128.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(4.dp))
             )
 
             Column(
@@ -193,9 +192,9 @@ private fun HistoryItem(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(5.dp)
-                            .clip(RoundedCornerShape(999.dp)),
+                            .clip(RoundedCornerShape(4.dp)),
                         color = AppColors.Primary,
-                        trackColor = Color.White.copy(alpha = 0.10f)
+                        trackColor = AppColors.SurfaceRaised
                     )
                 } else {
                     Text(

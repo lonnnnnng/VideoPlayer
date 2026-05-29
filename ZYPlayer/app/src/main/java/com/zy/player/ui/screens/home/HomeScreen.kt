@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -35,7 +34,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -245,9 +243,9 @@ private fun CinemaVodPoster(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(4.dp))
                 .background(AppColors.SurfaceAlt)
-                .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
+                .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
         ) {
             NetworkImage(
                 url = vod.vod_pic,
@@ -255,36 +253,14 @@ private fun CinemaVodPoster(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(6.dp)
-                    .widthIn(max = 88.dp),
-                color = if (item.sourceCount > 1) {
-                    AppColors.Primary
-                } else {
-                    Color.Black.copy(alpha = 0.60f)
-                },
-                contentColor = AppColors.TextPrimary,
-                shape = RoundedCornerShape(999.dp)
-            ) {
-                Text(
-                    text = if (item.sourceCount > 1) "${item.sourceCount}源" else item.siteName,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
             if (!vod.vod_remarks.isNullOrBlank()) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(6.dp),
                     color = AppColors.Primary,
-                    contentColor = AppColors.TextPrimary,
-                    shape = RoundedCornerShape(999.dp)
+                    contentColor = AppColors.OnPrimary,
+                    shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
                         text = vod.vod_remarks,

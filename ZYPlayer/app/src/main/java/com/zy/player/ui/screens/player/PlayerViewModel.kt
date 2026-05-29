@@ -117,6 +117,7 @@ class PlayerViewModel @Inject constructor(
     private val playbackCandidates = mutableListOf<PlaybackCandidate>()
     private var currentCandidateIndex = 0
     private var fallbackCandidatesLoaded = false
+    private var fallbackLoadJob: Job? = null
     private var isRecoveringPlayback = false
     private var networkSpeedUpdateJob: Job? = null
     private val transferSamples = ArrayDeque<TransferSample>()
@@ -225,6 +226,7 @@ class PlayerViewModel @Inject constructor(
             viewModelScope.launch {
                 startInitialPlayback()
             }
+            preloadFallbackCandidates()
         } else {
             Log.w(TAG, "init - episodeUrl is blank, not starting playback")
             _playbackUiState.value = PlaybackUiState(
@@ -264,6 +266,7 @@ class PlayerViewModel @Inject constructor(
         _isPlaying.value = false
         stopProgressUpdates()
         stopNetworkSpeedUpdates()
+        fallbackLoadJob?.cancel()
         playerManager.stopAndRelease()
     }
 
@@ -278,32 +281,37 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun loadSourceOptions() {
-        viewModelScope.launch {
-            ensureFallbackCandidatesLoaded()
+        publishSourceOptions()
+        if (fallbackCandidatesLoaded) return
+
+        val loadingMessage = if (title.isNotBlank()) {
+            "正在查找《$title》的备用线路"
+        } else {
+            "正在查找备用线路"
         }
+        _playbackUiState.value = PlaybackUiState(
+            sourceName = currentSourceName(),
+            message = loadingMessage,
+            isRecovering = true
+        )
+        preloadFallbackCandidates()
     }
 
     fun switchToSource(sourceKey: String) {
         viewModelScope.launch {
-            ensureFallbackCandidatesLoaded()
             val index = playbackCandidates.indexOfFirst { it.key == sourceKey }
             if (index >= 0) {
                 val candidate = playbackCandidates[index]
                 Log.d(TAG, "switchToSource - index=$index, source=${candidate.sourceName}")
-                if (index == currentCandidateIndex || isPlayableCandidate(candidate)) {
-                    playCandidate(index)
-                } else {
-                    val currentSource = playbackCandidates.getOrNull(currentCandidateIndex)?.sourceName ?: "当前线路"
-                    _playbackUiState.value = PlaybackUiState(
-                        sourceName = currentSource,
-                        message = "${candidate.sourceName} 暂不可用，已保持 $currentSource 播放",
-                        isRecovering = false,
-                        isFailed = false
-                    )
-                    Log.w(TAG, "switchToSource - candidate not playable, keep current source=$currentSource")
-                }
+                playCandidate(index)
             } else {
                 Log.w(TAG, "switchToSource - source not found: $sourceKey")
+                _playbackUiState.value = PlaybackUiState(
+                    sourceName = currentSourceName(),
+                    message = "正在查找备用线路",
+                    isRecovering = true
+                )
+                preloadFallbackCandidates()
             }
         }
     }
@@ -396,8 +404,11 @@ class PlayerViewModel @Inject constructor(
         }
 
         if (!fallbackCandidatesLoaded) {
-            fallbackCandidatesLoaded = true
-            mergePlaybackCandidates(loadFallbackCandidates())
+            fallbackLoadJob?.join()
+            if (!fallbackCandidatesLoaded) {
+                mergePlaybackCandidates(loadFallbackCandidates(updateUi = true))
+                fallbackCandidatesLoaded = true
+            }
         }
 
         nextIndex = currentCandidateIndex + 1
@@ -410,19 +421,33 @@ class PlayerViewModel @Inject constructor(
 
     private suspend fun ensureFallbackCandidatesLoaded() {
         if (!fallbackCandidatesLoaded) {
-            fallbackCandidatesLoaded = true
-            mergePlaybackCandidates(loadFallbackCandidates())
+            fallbackLoadJob?.join()
+            if (!fallbackCandidatesLoaded) {
+                mergePlaybackCandidates(loadFallbackCandidates(updateUi = true))
+                fallbackCandidatesLoaded = true
+            }
         }
         publishSourceOptions()
     }
 
-    private suspend fun loadFallbackCandidates(): List<PlaybackCandidate> {
+    private fun preloadFallbackCandidates() {
+        if (fallbackCandidatesLoaded || fallbackLoadJob?.isActive == true) return
+        fallbackLoadJob = viewModelScope.launch {
+            mergePlaybackCandidates(loadFallbackCandidates(updateUi = false))
+            fallbackCandidatesLoaded = true
+        }
+    }
+
+    private suspend fun loadFallbackCandidates(updateUi: Boolean): List<PlaybackCandidate> {
         if (title.isBlank() || episodeLabel.isBlank()) return emptyList()
 
-        _playbackUiState.value = PlaybackUiState(
-            message = "正在查找《$title》的备用线路",
-            isRecovering = true
-        )
+        if (updateUi) {
+            _playbackUiState.value = PlaybackUiState(
+                sourceName = currentSourceName(),
+                message = "正在查找《$title》的备用线路",
+                isRecovering = true
+            )
+        }
 
         val candidates = mutableListOf<PlaybackCandidate>()
         val enabledSites = siteRepository.getEnabledSites()
@@ -556,6 +581,10 @@ class PlayerViewModel @Inject constructor(
                 isCurrent = index == currentCandidateIndex
             )
         }
+    }
+
+    private fun currentSourceName(): String {
+        return playbackCandidates.getOrNull(currentCandidateIndex)?.sourceName ?: "当前线路"
     }
 
     private fun startProgressUpdates() {
@@ -694,6 +723,7 @@ class PlayerViewModel @Inject constructor(
         Log.d(TAG, "onCleared - Cleaning up")
         stopProgressUpdates()
         stopNetworkSpeedUpdates()
+        fallbackLoadJob?.cancel()
         playerManager.stopAndRelease()
         playerManager.removeAnalyticsListener(analyticsListener)
         playerManager.removeTransferByteListener(transferByteListener)
