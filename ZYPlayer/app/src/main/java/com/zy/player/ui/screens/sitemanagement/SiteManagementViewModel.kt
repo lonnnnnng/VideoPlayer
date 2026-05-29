@@ -13,13 +13,21 @@ import com.zy.player.data.repository.sourceCheckReturnedContent
 import com.zy.player.ui.components.SourceCheckResultDialogState
 import com.zy.player.ui.components.SourceCheckSummaryItem
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
 
 data class SiteImportUiState(
@@ -46,6 +54,9 @@ class SiteManagementViewModel @Inject constructor(
 
     private val _checkingSiteId = MutableStateFlow<Long?>(null)
     val checkingSiteId: StateFlow<Long?> = _checkingSiteId.asStateFlow()
+
+    private val _batchCheckingSiteIds = MutableStateFlow<Set<Long>>(emptySet())
+    val batchCheckingSiteIds: StateFlow<Set<Long>> = _batchCheckingSiteIds.asStateFlow()
 
     private val _checkResultDialog = MutableStateFlow<SourceCheckResultDialogState?>(null)
     val checkResultDialog: StateFlow<SourceCheckResultDialogState?> = _checkResultDialog.asStateFlow()
@@ -218,62 +229,59 @@ class SiteManagementViewModel @Inject constructor(
             val currentSites = siteRepository.getAllSites()
             if (currentSites.isEmpty()) return@launch
 
-            var successCount = 0
-            var failedCount = 0
-            val checkedSites = mutableListOf<VideoSiteEntity>()
+            val successCount = AtomicInteger(0)
+            val failedCount = AtomicInteger(0)
+            val completedCount = AtomicInteger(0)
+            val semaphore = Semaphore(BATCH_CHECK_PARALLELISM)
             _batchCheckUiState.value = BatchCheckUiState(
                 isChecking = true,
                 total = currentSites.size,
-                message = "准备检测 ${currentSites.size} 个视频源"
+                message = "并行检测 ${currentSites.size} 个视频源"
             )
 
-            currentSites.forEachIndexed { index, site ->
-                _batchCheckUiState.value = BatchCheckUiState(
-                    isChecking = true,
-                    currentIndex = index + 1,
-                    total = currentSites.size,
-                    message = "正在检测 ${site.name}"
-                )
-                val result = vodRepository.checkVideoSite(site.apiUrl, timeoutMs = BATCH_CHECK_TIMEOUT_MS)
-                result.fold(
-                    onSuccess = { response ->
-                        successCount += 1
-                        checkedSites +=
-                            site.copy(
-                                enabled = true,
-                                lastCheckStatus = "可用",
-                                lastCheckTime = System.currentTimeMillis(),
-                                lastLatencyMs = response.latencyMs
-                            )
-                    },
-                    onFailure = { error ->
-                        failedCount += 1
-                        val reason = if (error is TimeoutCancellationException) {
-                            "超时"
-                        } else {
-                            classifySourceCheckFailure(error).statusText
+            try {
+                val checkedSites = coroutineScope {
+                    currentSites.map { site ->
+                        async(Dispatchers.IO) {
+                            semaphore.withPermit {
+                                _batchCheckingSiteIds.update { it + site.id }
+                                try {
+                                    val checkedSite = checkSiteForBatch(site)
+                                    siteRepository.updateSite(checkedSite)
+
+                                    val completed = completedCount.incrementAndGet()
+                                    if (checkedSite.enabled && checkedSite.lastLatencyMs > 0L) {
+                                        successCount.incrementAndGet()
+                                    } else {
+                                        failedCount.incrementAndGet()
+                                    }
+                                    _batchCheckUiState.value = BatchCheckUiState(
+                                        isChecking = true,
+                                        currentIndex = completed,
+                                        total = currentSites.size,
+                                        message = "刚完成：${site.name}"
+                                    )
+                                    checkedSite
+                                } finally {
+                                    _batchCheckingSiteIds.update { it - site.id }
+                                }
+                            }
                         }
-                        checkedSites +=
-                            site.copy(
-                                enabled = false,
-                                lastCheckStatus = reason,
-                                lastCheckTime = System.currentTimeMillis(),
-                                lastLatencyMs = 0,
-                                isDefault = false
-                            )
-                    }
+                    }.awaitAll()
+                }
+
+                val reorderedSites = reorderCheckedSites(checkedSites)
+                siteRepository.updateSites(reorderedSites)
+
+                _batchCheckUiState.value = BatchCheckUiState(
+                    isChecking = false,
+                    currentIndex = currentSites.size,
+                    total = currentSites.size,
+                    message = "批量检测完成：可用 ${successCount.get()} 个，已自动禁用 ${failedCount.get()} 个，已按延迟排序。"
                 )
+            } finally {
+                _batchCheckingSiteIds.value = emptySet()
             }
-
-            val reorderedSites = reorderCheckedSites(checkedSites)
-            siteRepository.updateSites(reorderedSites)
-
-            _batchCheckUiState.value = BatchCheckUiState(
-                isChecking = false,
-                currentIndex = currentSites.size,
-                total = currentSites.size,
-                message = "批量检测完成：可用 ${successCount} 个，已自动禁用 ${failedCount} 个，已按延迟排序。"
-            )
         }
     }
 
@@ -336,6 +344,34 @@ class SiteManagementViewModel @Inject constructor(
         return trim().trimEnd('/')
     }
 
+    private suspend fun checkSiteForBatch(site: VideoSiteEntity): VideoSiteEntity {
+        val result = vodRepository.checkVideoSite(site.apiUrl, timeoutMs = BATCH_CHECK_TIMEOUT_MS)
+        return result.fold(
+            onSuccess = { response ->
+                site.copy(
+                    enabled = true,
+                    lastCheckStatus = "可用",
+                    lastCheckTime = System.currentTimeMillis(),
+                    lastLatencyMs = response.latencyMs
+                )
+            },
+            onFailure = { error ->
+                val reason = if (error is TimeoutCancellationException) {
+                    "超时"
+                } else {
+                    classifySourceCheckFailure(error).statusText
+                }
+                site.copy(
+                    enabled = false,
+                    lastCheckStatus = reason,
+                    lastCheckTime = System.currentTimeMillis(),
+                    lastLatencyMs = 0,
+                    isDefault = false
+                )
+            }
+        )
+    }
+
     private fun reorderCheckedSites(sites: List<VideoSiteEntity>): List<VideoSiteEntity> {
         val availableSites = sites
             .filter { it.enabled && it.lastLatencyMs > 0L }
@@ -355,5 +391,6 @@ class SiteManagementViewModel @Inject constructor(
 
     private companion object {
         const val BATCH_CHECK_TIMEOUT_MS = 10_000L
+        const val BATCH_CHECK_PARALLELISM = 6
     }
 }

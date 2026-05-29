@@ -1,7 +1,9 @@
 package com.zy.player.ui.screens.sitemanagement
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -34,7 +37,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,8 +47,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -72,6 +78,7 @@ fun SiteManagementScreen(
 ) {
     val sites by viewModel.sites.collectAsState()
     val checkingSiteId by viewModel.checkingSiteId.collectAsState()
+    val batchCheckingSiteIds by viewModel.batchCheckingSiteIds.collectAsState()
     val checkResultDialog by viewModel.checkResultDialog.collectAsState()
     val importUiState by viewModel.importUiState.collectAsState()
     val batchCheckUiState by viewModel.batchCheckUiState.collectAsState()
@@ -165,8 +172,8 @@ fun SiteManagementScreen(
                 )
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     itemsIndexed(sites) { index, site ->
                         SiteItem(
@@ -180,8 +187,9 @@ fun SiteManagementScreen(
                             onMoveDown = { viewModel.moveSiteDown(site) },
                             onCheck = { viewModel.checkSite(site) },
                             onSetDefault = { viewModel.setDefaultSite(site) },
-                            isChecking = checkingSiteId == site.id,
-                            isCheckEnabled = !isBusy || checkingSiteId == site.id
+                            isChecking = checkingSiteId == site.id || site.id in batchCheckingSiteIds,
+                            isCheckEnabled = !isBusy || checkingSiteId == site.id,
+                            actionsEnabled = !isBusy
                         )
                     }
                 }
@@ -269,7 +277,8 @@ private fun SiteItem(
     onCheck: () -> Unit,
     onSetDefault: () -> Unit,
     isChecking: Boolean,
-    isCheckEnabled: Boolean
+    isCheckEnabled: Boolean,
+    actionsEnabled: Boolean
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -278,8 +287,8 @@ private fun SiteItem(
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -288,13 +297,13 @@ private fun SiteItem(
             ) {
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
                         text = site.name,
                         color = AppColors.TextPrimary,
-                        fontSize = 14.sp,
-                        lineHeight = 18.sp,
+                        fontSize = 13.sp,
+                        lineHeight = 16.sp,
                         fontWeight = FontWeight.Black,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -302,15 +311,16 @@ private fun SiteItem(
                     Text(
                         text = site.apiUrl,
                         color = AppColors.TextSecondary,
-                        fontSize = 10.sp,
-                        lineHeight = 13.sp,
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Switch(
+                CompactEnabledSwitch(
                     checked = site.enabled,
-                    onCheckedChange = { onToggleEnabled() }
+                    onToggle = onToggleEnabled,
+                    enabled = actionsEnabled
                 )
             }
 
@@ -319,21 +329,16 @@ private fun SiteItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = formatSiteCheckStatus(site),
+                SiteCheckMeta(
+                    site = site,
                     modifier = Modifier.weight(1f),
-                    color = if (site.enabled) AppColors.TextTertiary else AppColors.Error,
-                    fontSize = 10.sp,
-                    lineHeight = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    isChecking = isChecking
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
                     ManagementIconButton(
                         icon = if (site.isDefault) Icons.Default.Star else Icons.Default.StarBorder,
                         contentDescription = if (site.isDefault) "默认源" else "设为默认源",
-                        enabled = !site.isDefault,
+                        enabled = actionsEnabled && !site.isDefault,
                         active = site.isDefault,
                         onClick = onSetDefault
                     )
@@ -347,28 +352,97 @@ private fun SiteItem(
                     ManagementIconButton(
                         icon = Icons.Default.ArrowUpward,
                         contentDescription = "上移",
-                        enabled = canMoveUp,
+                        enabled = actionsEnabled && canMoveUp,
                         onClick = onMoveUp
                     )
                     ManagementIconButton(
                         icon = Icons.Default.ArrowDownward,
                         contentDescription = "下移",
-                        enabled = canMoveDown,
+                        enabled = actionsEnabled && canMoveDown,
                         onClick = onMoveDown
                     )
                     ManagementIconButton(
                         icon = Icons.Default.Edit,
                         contentDescription = "编辑",
+                        enabled = actionsEnabled,
                         onClick = onEdit
                     )
                     ManagementIconButton(
                         icon = Icons.Default.Delete,
                         contentDescription = "删除",
+                        enabled = actionsEnabled,
                         onClick = onDelete
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CompactEnabledSwitch(
+    checked: Boolean,
+    onToggle: () -> Unit,
+    enabled: Boolean
+) {
+    val trackColor = when {
+        !enabled -> AppColors.SurfaceRaised
+        checked -> AppColors.Primary
+        else -> AppColors.SurfaceRaised
+    }
+    val thumbColor = if (enabled) AppColors.OnPrimary else AppColors.TextTertiary
+    Surface(
+        modifier = Modifier
+            .size(width = 34.dp, height = 19.dp)
+            .clickable(enabled = enabled, onClick = onToggle),
+        color = trackColor,
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, if (checked) AppColors.Primary else AppColors.DividerStrong)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(2.dp)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .size(15.dp)
+                    .align(if (checked) Alignment.CenterEnd else Alignment.CenterStart),
+                color = thumbColor,
+                shape = CircleShape
+            ) {}
+        }
+    }
+}
+
+@Composable
+private fun SiteCheckMeta(
+    site: VideoSiteEntity,
+    modifier: Modifier = Modifier,
+    isChecking: Boolean
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (isChecking) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                color = AppColors.Primary,
+                strokeWidth = 1.5.dp
+            )
+        }
+        Text(
+            text = if (isChecking) buildAnnotatedString { append("检测中") } else siteCheckMetaText(site),
+            modifier = Modifier.weight(1f),
+            color = AppColors.Primary,
+            fontSize = 9.5.sp,
+            lineHeight = 11.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -381,16 +455,17 @@ private fun ManagementIconButton(
     active: Boolean = false,
     onClick: () -> Unit
 ) {
-    IconButton(
-        onClick = onClick,
-        enabled = enabled && !isLoading,
-        modifier = Modifier.size(30.dp)
+    Box(
+        modifier = Modifier
+            .size(24.dp)
+            .clickable(enabled = enabled && !isLoading, onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
         if (isLoading) {
             CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(12.dp),
                 color = AppColors.Primary,
-                strokeWidth = 2.dp
+                strokeWidth = 1.7.dp
             )
         } else {
             Icon(
@@ -401,21 +476,71 @@ private fun ManagementIconButton(
                     enabled -> AppColors.TextPrimary
                     else -> AppColors.TextTertiary
                 },
-                modifier = Modifier.size(17.dp)
+                modifier = Modifier.size(14.dp)
             )
         }
     }
 }
 
-private fun formatSiteCheckStatus(site: VideoSiteEntity): String {
+private fun siteCheckStatusLabel(site: VideoSiteEntity): String {
     if (site.lastCheckTime <= 0L) {
         return "未检测"
     }
-    return listOfNotNull(
-        site.lastCheckStatus.toSiteStatusLabel(),
-        site.lastLatencyMs.takeIf { it > 0L }?.let { "${it}ms" },
-        formatCheckTime(site.lastCheckTime)
-    ).joinToString(" · ")
+    return site.lastCheckStatus.toSiteStatusLabel()
+}
+
+private fun siteCheckTimeLabel(site: VideoSiteEntity): String? {
+    return site.lastCheckTime.takeIf { it > 0L }?.let(::formatCheckTime)
+}
+
+private fun siteLatencyLabel(site: VideoSiteEntity): String? {
+    if (site.lastCheckTime <= 0L || site.lastLatencyMs <= 0L) return null
+    return "${site.lastLatencyMs}ms"
+}
+
+private fun siteCheckMetaText(site: VideoSiteEntity) = buildAnnotatedString {
+    withStyle(
+        SpanStyle(
+            color = siteCheckStatusColor(site),
+            fontWeight = FontWeight.Bold
+        )
+    ) {
+        append(siteCheckStatusLabel(site))
+    }
+    siteLatencyLabel(site)?.let { latency ->
+        append(" · ")
+        withStyle(
+            SpanStyle(
+                color = siteLatencyColor(site.lastLatencyMs),
+                fontWeight = FontWeight.Bold
+            )
+        ) {
+            append(latency)
+        }
+    }
+    siteCheckTimeLabel(site)?.let { checkTime ->
+        append(" · ")
+        withStyle(SpanStyle(color = AppColors.TextTertiary)) {
+            append(checkTime)
+        }
+    }
+}
+
+private fun siteCheckStatusColor(site: VideoSiteEntity): Color {
+    return when {
+        site.lastCheckTime <= 0L -> AppColors.TextTertiary
+        site.lastCheckStatus == "可用" || site.lastCheckStatus == "可播放" -> AppColors.Success
+        else -> AppColors.Error
+    }
+}
+
+private fun siteLatencyColor(latencyMs: Long): Color {
+    return when {
+        latencyMs in 1..800 -> AppColors.Success
+        latencyMs in 801..2500 -> AppColors.Warning
+        latencyMs > 2500 -> AppColors.Error
+        else -> AppColors.TextTertiary
+    }
 }
 
 private fun String.toSiteStatusLabel(): String {
