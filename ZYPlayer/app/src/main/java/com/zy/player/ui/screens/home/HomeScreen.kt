@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zy.player.data.remote.VodItem
 import com.zy.player.ui.components.CinemaBackground
@@ -206,6 +207,8 @@ private fun HomeStickyHeader(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .zIndex(1f)
+            .background(AppColors.Shell)
             .padding(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 12.dp)
     ) {
         CinemaSearchPill(

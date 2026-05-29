@@ -79,20 +79,18 @@ fun LiveScreen(
                 )
             }
             else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    item {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(AppColors.Shell)
+                    ) {
                         LiveSearchRow(
                             searchQuery = searchQuery,
                             onSearchChange = viewModel::setSearchQuery,
                             onSourceClick = { showSourceSelector = true }
                         )
-                    }
 
-                    item {
                         SourceTabs(
                             labels = groups.ifEmpty { listOf("央视", "卫视", "体育", "电影", "少儿") },
                             selected = selectedGroup,
@@ -103,30 +101,36 @@ fun LiveScreen(
                         )
                     }
 
-                    when (state) {
-                        is LiveUiState.Error -> item {
-                            CinemaMessage(
-                                title = "直播源连接失败",
-                                message = state.message,
-                                actionText = "重试",
-                                onAction = { currentSourceId?.let { viewModel.selectSource(it) } }
-                            )
-                        }
-                        is LiveUiState.Empty -> item {
-                            CinemaMessage(
-                                title = "暂无频道",
-                                message = "当前筛选没有频道，清除搜索或切换分组再试。"
-                            )
-                        }
-                        is LiveUiState.Success -> {
-                            items(state.channels) { channel ->
-                                ChannelRow(
-                                    channel = channel,
-                                    onClick = { onNavigateToPlayer(channel, currentSourceId) }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        when (state) {
+                            is LiveUiState.Error -> item {
+                                CinemaMessage(
+                                    title = "直播源连接失败",
+                                    message = state.message,
+                                    actionText = "重试",
+                                    onAction = { currentSourceId?.let { viewModel.selectSource(it) } }
                                 )
                             }
+                            is LiveUiState.Empty -> item {
+                                CinemaMessage(
+                                    title = "暂无频道",
+                                    message = "当前筛选没有频道，清除搜索或切换分组再试。"
+                                )
+                            }
+                            is LiveUiState.Success -> {
+                                items(state.channels) { channel ->
+                                    ChannelRow(
+                                        channel = channel,
+                                        onClick = { onNavigateToPlayer(channel, currentSourceId) }
+                                    )
+                                }
+                            }
+                            LiveUiState.Loading -> Unit
                         }
-                        LiveUiState.Loading -> Unit
                     }
                 }
             }
