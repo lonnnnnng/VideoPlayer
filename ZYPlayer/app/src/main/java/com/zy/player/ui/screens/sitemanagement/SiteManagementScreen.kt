@@ -317,6 +317,27 @@ private fun SiteItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SitePrimaryActionButton(
+                        icon = if (site.isDefault) Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = if (site.isDefault) "默认源" else "设为默认源",
+                        enabled = actionsEnabled && !site.isDefault,
+                        active = site.isDefault,
+                        activeTint = Color(0xFFFACC15),
+                        onClick = onSetDefault
+                    )
+                    SitePrimaryActionButton(
+                        icon = Icons.Default.CheckCircle,
+                        contentDescription = "检测",
+                        enabled = isCheckEnabled || isChecking,
+                        isLoading = isChecking,
+                        onClick = onCheck
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
                 CompactEnabledSwitch(
                     checked = site.enabled,
                     onToggle = onToggleEnabled,
@@ -335,20 +356,6 @@ private fun SiteItem(
                     isChecking = isChecking
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                    ManagementIconButton(
-                        icon = if (site.isDefault) Icons.Default.Star else Icons.Default.StarBorder,
-                        contentDescription = if (site.isDefault) "默认源" else "设为默认源",
-                        enabled = actionsEnabled && !site.isDefault,
-                        active = site.isDefault,
-                        onClick = onSetDefault
-                    )
-                    ManagementIconButton(
-                        icon = Icons.Default.CheckCircle,
-                        contentDescription = "检测",
-                        enabled = isCheckEnabled || isChecking,
-                        isLoading = isChecking,
-                        onClick = onCheck
-                    )
                     ManagementIconButton(
                         icon = Icons.Default.ArrowUpward,
                         contentDescription = "上移",
@@ -443,6 +450,44 @@ private fun SiteCheckMeta(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@Composable
+private fun SitePrimaryActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    enabled: Boolean = true,
+    isLoading: Boolean = false,
+    active: Boolean = false,
+    activeTint: Color = AppColors.Primary,
+    onClick: () -> Unit
+) {
+    val tint = when {
+        active -> activeTint
+        enabled -> AppColors.TextPrimary
+        else -> AppColors.TextTertiary
+    }
+    Box(
+        modifier = Modifier
+            .size(width = 24.dp, height = 19.dp)
+            .clickable(enabled = enabled && !isLoading, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(13.dp),
+                color = AppColors.Primary,
+                strokeWidth = 1.8.dp
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = tint,
+                modifier = Modifier.size(17.dp)
+            )
+        }
     }
 }
 

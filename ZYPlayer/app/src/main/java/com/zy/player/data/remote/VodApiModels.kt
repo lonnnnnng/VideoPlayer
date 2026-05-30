@@ -30,6 +30,8 @@ data class VodItem(
     @SerializedName("vod_content") val vod_content: String? = null,
     @SerializedName("vod_area") val vod_area: String? = null,
     @SerializedName("vod_year") val vod_year: String? = null,
+    @SerializedName("vod_time") val vod_time: String? = null,
+    @SerializedName("vod_time_add") val vod_time_add: String? = null,
     @SerializedName("vod_play_from") val vod_play_from: String? = null,
     @SerializedName("vod_play_url") val vod_play_url: String? = null
 )

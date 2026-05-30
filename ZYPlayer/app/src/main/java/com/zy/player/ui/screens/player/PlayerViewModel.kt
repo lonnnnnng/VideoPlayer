@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.MediaLoadData
 import com.zy.player.data.repository.HistoryRepository
 import com.zy.player.data.repository.LiveRepository
+import com.zy.player.data.repository.NetworkSettingsRepository
 import com.zy.player.data.repository.SiteRepository
 import com.zy.player.data.repository.VodRepository
 import com.zy.player.domain.model.EpisodeGroup
@@ -33,6 +34,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 data class PlaybackUiState(
@@ -63,6 +65,7 @@ class PlayerViewModel @Inject constructor(
     private val siteRepository: SiteRepository,
     private val vodRepository: VodRepository,
     private val okHttpClient: OkHttpClient,
+    private val networkSettingsRepository: NetworkSettingsRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -453,14 +456,19 @@ class PlayerViewModel @Inject constructor(
         val enabledSites = siteRepository.getEnabledSites()
         enabledSites.forEach { site ->
             val detailItems = if (site.id == siteId && vodId.isNotBlank()) {
-                vodRepository.getVodDetail(site.apiUrl, vodId).getOrNull()
+                vodRepository.getVodDetail(
+                    site.apiUrl,
+                    vodId,
+                    timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
+                ).getOrNull()
                     ?.list
                     .orEmpty()
             } else {
                 val searchResults = vodRepository.getVodList(
                     baseUrl = site.apiUrl,
                     page = 1,
-                    keyword = title
+                    keyword = title,
+                    timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
                 ).getOrNull()?.list.orEmpty()
                 val matched = searchResults.firstOrNull {
                     normalizeTitle(it.vod_name) == normalizeTitle(title)
@@ -469,7 +477,11 @@ class PlayerViewModel @Inject constructor(
                         normalizeTitle(title).contains(normalizeTitle(it.vod_name))
                 } ?: searchResults.firstOrNull()
                 matched?.let { item ->
-                    vodRepository.getVodDetail(site.apiUrl, item.vod_id.toString()).getOrNull()?.list.orEmpty()
+                    vodRepository.getVodDetail(
+                        site.apiUrl,
+                        item.vod_id.toString(),
+                        timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
+                    ).getOrNull()?.list.orEmpty()
                 }.orEmpty()
             }
 
@@ -540,7 +552,12 @@ class PlayerViewModel @Inject constructor(
             .build()
 
         runCatching {
-            okHttpClient.newCall(request).execute().use { response ->
+            okHttpClient.newCall(request).apply {
+                timeout().timeout(
+                    networkSettingsRepository.currentSettings().videoSourceTimeoutMs,
+                    TimeUnit.MILLISECONDS
+                )
+            }.execute().use { response ->
                 val bodySample = response.peekBody(4096).string()
                 val contentType = response.header("Content-Type").orEmpty().lowercase()
                 val playable = response.isSuccessful && (
@@ -759,6 +776,7 @@ class PlayerViewModel @Inject constructor(
 class LivePlayerViewModel @Inject constructor(
     private val playerManager: PlayerManager,
     private val liveRepository: LiveRepository,
+    private val networkSettingsRepository: NetworkSettingsRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -1055,7 +1073,10 @@ class LivePlayerViewModel @Inject constructor(
             if (source.id == sourceId) 0 else 1
         }
         val candidates = orderedSources.flatMap { source ->
-            liveRepository.fetchAndParseChannels(source.url)
+            liveRepository.fetchAndParseChannels(
+                source.url,
+                timeoutMs = networkSettingsRepository.currentSettings().liveSourceTimeoutMs
+            )
                 .getOrNull()
                 .orEmpty()
                 .filter { normalizeLiveChannelName(it.name) == targetName }

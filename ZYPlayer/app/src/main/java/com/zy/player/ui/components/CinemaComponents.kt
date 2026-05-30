@@ -203,10 +203,9 @@ fun CinemaSearchInput(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     horizontalPadding: Dp = 18.dp,
+    focusRequester: FocusRequester = remember { FocusRequester() },
     trailingContent: @Composable RowScope.() -> Unit = {}
 ) {
-    val focusRequester = remember { FocusRequester() }
-
     CinemaSearchSurface(
         modifier = modifier,
         horizontalPadding = horizontalPadding,

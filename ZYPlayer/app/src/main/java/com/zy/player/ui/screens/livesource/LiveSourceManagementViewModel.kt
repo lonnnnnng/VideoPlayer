@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.zy.player.data.local.entity.LiveSourceEntity
 import com.zy.player.data.repository.LiveSourceCheckResponse
 import com.zy.player.data.repository.LiveRepository
+import com.zy.player.data.repository.NetworkSettingsRepository
 import com.zy.player.data.repository.classifySourceCheckFailure
 import com.zy.player.data.repository.sourceCheckFailureMessage
 import com.zy.player.data.repository.sourceCheckReturnedContent
@@ -21,7 +22,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class LiveSourceManagementViewModel @Inject constructor(
-    private val liveRepository: LiveRepository
+    private val liveRepository: LiveRepository,
+    private val networkSettingsRepository: NetworkSettingsRepository
 ) : ViewModel() {
 
     val sources: StateFlow<List<LiveSourceEntity>> = liveRepository.observeAllSources()
@@ -83,7 +85,10 @@ class LiveSourceManagementViewModel @Inject constructor(
         viewModelScope.launch {
             _checkingSourceId.value = source.id
             try {
-                val result = liveRepository.checkLiveSource(source.url)
+                val result = liveRepository.checkLiveSource(
+                    source.url,
+                    timeoutMs = networkSettingsRepository.currentSettings().liveSourceTimeoutMs
+                )
                 result.fold(
                     onSuccess = { response ->
                         liveRepository.updateSource(

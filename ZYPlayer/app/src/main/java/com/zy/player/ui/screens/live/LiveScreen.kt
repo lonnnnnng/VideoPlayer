@@ -1,6 +1,5 @@
 package com.zy.player.ui.screens.live
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,7 +23,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -37,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,6 +45,7 @@ import com.zy.player.domain.model.LiveChannel
 import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.components.CinemaLoading
 import com.zy.player.ui.components.CinemaMessage
+import com.zy.player.ui.components.NetworkImage
 import com.zy.player.ui.components.CinemaSearchInput
 import com.zy.player.ui.theme.AppColors
 
@@ -101,7 +101,7 @@ fun LiveScreen(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 8.dp, bottom = 18.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         when (state) {
                             is LiveUiState.Error -> item {
@@ -176,7 +176,7 @@ private fun LiveSearchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 0.dp),
+            .padding(start = 14.dp, top = 8.dp, end = 14.dp, bottom = 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         CinemaSearchInput(
@@ -194,32 +194,30 @@ private fun LiveSourceChip(
     sourceName: String,
     onClick: () -> Unit
 ) {
-    Surface(
-        onClick = onClick,
-        color = AppColors.PrimaryLight,
-        contentColor = AppColors.Primary,
-        shape = RoundedCornerShape(4.dp),
-        border = BorderStroke(1.dp, AppColors.Primary.copy(alpha = 0.42f)),
-        modifier = Modifier.width(70.dp)
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(AppColors.PrimaryLight)
+            .border(1.dp, AppColors.Primary.copy(alpha = 0.42f), RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.MoreVert,
-                contentDescription = "切换直播源：$sourceName",
-                tint = AppColors.Primary,
-                modifier = Modifier.size(15.dp)
-            )
-            Text(
-                text = "换源",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-        }
+        Icon(
+            imageVector = Icons.Default.MoreVert,
+            contentDescription = "切换直播源：$sourceName",
+            tint = AppColors.Primary,
+            modifier = Modifier.size(15.dp)
+        )
+        Text(
+            text = "换源",
+            color = AppColors.Primary,
+            fontSize = 12.sp,
+            lineHeight = 15.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
     }
 }
 
@@ -235,8 +233,8 @@ private fun SourceTabs(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 6.dp),
+            .padding(horizontal = 14.dp)
+            .padding(top = 2.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -273,21 +271,26 @@ private fun SourceTabChip(
     active: Boolean,
     onClick: () -> Unit
 ) {
-    Surface(
-        onClick = onClick,
-        color = if (active) AppColors.Primary else AppColors.Surface,
-        contentColor = if (active) AppColors.OnPrimary else AppColors.TextPrimary,
-        shape = RoundedCornerShape(4.dp),
-        border = if (active) null else BorderStroke(1.dp, AppColors.Divider)
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1
-        )
-    }
+    Text(
+        text = label,
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(if (active) AppColors.Primary else AppColors.Surface)
+            .then(
+                if (active) {
+                    Modifier
+                } else {
+                    Modifier.border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        color = if (active) AppColors.OnPrimary else AppColors.TextPrimary,
+        fontSize = 12.sp,
+        lineHeight = 15.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1
+    )
 }
 
 @Composable
@@ -297,35 +300,45 @@ private fun ChannelRow(
 ) {
     Row(
         modifier = Modifier
-            .padding(horizontal = 18.dp, vertical = 4.5.dp)
+            .padding(horizontal = 14.dp, vertical = 2.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(4.dp))
             .background(AppColors.Surface)
             .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 13.dp, vertical = 11.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
+                .size(34.dp)
                 .clip(RoundedCornerShape(4.dp))
                 .background(AppColors.PrimaryLight),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = channel.name.filter { it.isDigit() }.take(2).ifBlank { channel.name.take(1) },
-                color = AppColors.Primary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Black
-            )
+            if (channel.logo.isNotBlank()) {
+                NetworkImage(
+                    url = channel.logo,
+                    contentDescription = "${channel.name}台标",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            } else {
+                Text(
+                    text = channel.name.filter { it.isDigit() }.take(2).ifBlank { channel.name.take(1) },
+                    color = AppColors.Primary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
         }
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = channel.name,
                 color = AppColors.TextPrimary,
-                fontSize = 15.sp,
+                fontSize = 13.sp,
+                lineHeight = 16.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -333,8 +346,9 @@ private fun ChannelRow(
             Text(
                 text = "${channel.group} · ${channel.format}",
                 color = AppColors.TextTertiary,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 3.dp),
+                fontSize = 10.sp,
+                lineHeight = 12.sp,
+                modifier = Modifier.padding(top = 2.dp),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -342,7 +356,8 @@ private fun ChannelRow(
         Text(
             text = "LIVE",
             color = AppColors.Success,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
             fontWeight = FontWeight.Black
         )
         Spacer(modifier = Modifier.width(4.dp))
@@ -350,7 +365,7 @@ private fun ChannelRow(
             imageVector = Icons.Default.PlayArrow,
             contentDescription = "播放",
             tint = AppColors.Primary,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(20.dp)
         )
     }
 }

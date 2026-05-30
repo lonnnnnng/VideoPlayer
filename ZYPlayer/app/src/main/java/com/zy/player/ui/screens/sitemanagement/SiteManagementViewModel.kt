@@ -3,6 +3,7 @@ package com.zy.player.ui.screens.sitemanagement
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zy.player.data.local.entity.VideoSiteEntity
+import com.zy.player.data.repository.NetworkSettingsRepository
 import com.zy.player.data.repository.SiteRepository
 import com.zy.player.data.repository.VideoSiteImportRepository
 import com.zy.player.data.repository.VideoSiteCheckResponse
@@ -46,7 +47,8 @@ data class BatchCheckUiState(
 class SiteManagementViewModel @Inject constructor(
     private val siteRepository: SiteRepository,
     private val vodRepository: VodRepository,
-    private val importRepository: VideoSiteImportRepository
+    private val importRepository: VideoSiteImportRepository,
+    private val networkSettingsRepository: NetworkSettingsRepository
 ) : ViewModel() {
 
     val sites: StateFlow<List<VideoSiteEntity>> = siteRepository.observeAllSites()
@@ -179,7 +181,10 @@ class SiteManagementViewModel @Inject constructor(
         viewModelScope.launch {
             _checkingSiteId.value = site.id
             try {
-                val result = vodRepository.checkVideoSite(site.apiUrl)
+                val result = vodRepository.checkVideoSite(
+                    site.apiUrl,
+                    timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
+                )
                 result.fold(
                     onSuccess = { response ->
                         siteRepository.updateSite(
@@ -345,7 +350,10 @@ class SiteManagementViewModel @Inject constructor(
     }
 
     private suspend fun checkSiteForBatch(site: VideoSiteEntity): VideoSiteEntity {
-        val result = vodRepository.checkVideoSite(site.apiUrl, timeoutMs = BATCH_CHECK_TIMEOUT_MS)
+        val result = vodRepository.checkVideoSite(
+            site.apiUrl,
+            timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
+        )
         return result.fold(
             onSuccess = { response ->
                 site.copy(
@@ -390,7 +398,6 @@ class SiteManagementViewModel @Inject constructor(
     }
 
     private companion object {
-        const val BATCH_CHECK_TIMEOUT_MS = 10_000L
         const val BATCH_CHECK_PARALLELISM = 6
     }
 }

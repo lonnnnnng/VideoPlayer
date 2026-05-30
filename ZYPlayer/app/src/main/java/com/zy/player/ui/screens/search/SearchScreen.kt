@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,11 @@ fun SearchScreen(
 ) {
     var searchText by remember { mutableStateOf("") }
     val searchHistory by viewModel.searchHistory.collectAsState()
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
 
     fun submitSearch(keyword: String = searchText) {
         val trimmed = keyword.trim()
@@ -56,6 +62,7 @@ fun SearchScreen(
                 onValueChange = { searchText = it },
                 modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 12.dp),
                 horizontalPadding = 0.dp,
+                focusRequester = focusRequester,
                 trailingContent = {
                     if (searchText.isNotEmpty()) {
                         Spacer(modifier = Modifier.width(8.dp))

@@ -3,8 +3,11 @@ package com.zy.player.ui.theme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 
 private val BrightCinemaColorScheme = lightColorScheme(
@@ -31,6 +34,30 @@ private val StableCinemaShapes = Shapes(
     extraLarge = RoundedCornerShape(6.dp)
 )
 
+private val HeitiFontFamily = FontFamily.SansSerif
+
+private val StableCinemaTypography = Typography().run {
+    Typography(
+        displayLarge = displayLarge.withHeiti(),
+        displayMedium = displayMedium.withHeiti(),
+        displaySmall = displaySmall.withHeiti(),
+        headlineLarge = headlineLarge.withHeiti(),
+        headlineMedium = headlineMedium.withHeiti(),
+        headlineSmall = headlineSmall.withHeiti(),
+        titleLarge = titleLarge.withHeiti(),
+        titleMedium = titleMedium.withHeiti(),
+        titleSmall = titleSmall.withHeiti(),
+        bodyLarge = bodyLarge.withHeiti(),
+        bodyMedium = bodyMedium.withHeiti(),
+        bodySmall = bodySmall.withHeiti(),
+        labelLarge = labelLarge.withHeiti(),
+        labelMedium = labelMedium.withHeiti(),
+        labelSmall = labelSmall.withHeiti()
+    )
+}
+
+private fun TextStyle.withHeiti(): TextStyle = copy(fontFamily = HeitiFontFamily)
+
 @Composable
 fun ZYPlayerTheme(
     content: @Composable () -> Unit
@@ -38,6 +65,7 @@ fun ZYPlayerTheme(
     MaterialTheme(
         colorScheme = BrightCinemaColorScheme,
         shapes = StableCinemaShapes,
+        typography = StableCinemaTypography,
         content = content
     )
 }

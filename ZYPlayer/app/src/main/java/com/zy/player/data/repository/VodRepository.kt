@@ -23,11 +23,11 @@ import javax.inject.Singleton
 class VodRepository @Inject constructor(
     private val apiService: VodApiService,
     private val okHttpClient: OkHttpClient,
-    private val gson: Gson
+    private val gson: Gson,
+    private val networkSettingsRepository: NetworkSettingsRepository
 ) {
     companion object {
         private const val TAG = "VodRepository"
-        private const val REQUEST_TIMEOUT_MS = 5_000L
         const val VIDEO_SITE_CHECK_TIMEOUT_MS = 10_000L
         private const val CACHE_TTL_MS = 2 * 60 * 1_000L
     }
@@ -44,7 +44,8 @@ class VodRepository @Inject constructor(
         page: Int? = null,
         typeId: Int? = null,
         keyword: String? = null,
-        forceRefresh: Boolean = false
+        forceRefresh: Boolean = false,
+        timeoutMs: Long = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
     ): Result<VodApiResponse> {
         val cacheKey = buildCacheKey("list", baseUrl, page, typeId, keyword)
         val url = buildString {
@@ -60,7 +61,8 @@ class VodRepository @Inject constructor(
         return executeWithCache(
             cacheKey = cacheKey,
             forceRefresh = forceRefresh,
-            label = "getVodList"
+            label = "getVodList",
+            timeoutMs = timeoutMs
         ) {
             apiService.getVodList(
                 url = baseUrl,
@@ -76,7 +78,8 @@ class VodRepository @Inject constructor(
     suspend fun getVodDetail(
         baseUrl: String,
         vodId: String,
-        forceRefresh: Boolean = false
+        forceRefresh: Boolean = false,
+        timeoutMs: Long = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
     ): Result<VodApiResponse> {
         val cacheKey = buildCacheKey("detail", baseUrl, vodId)
         val url = "$baseUrl?ac=detail&ids=$vodId"
@@ -86,7 +89,8 @@ class VodRepository @Inject constructor(
         return executeWithCache(
             cacheKey = cacheKey,
             forceRefresh = forceRefresh,
-            label = "getVodDetail"
+            label = "getVodDetail",
+            timeoutMs = timeoutMs
         ) {
             apiService.getVodDetail(
                 url = baseUrl,
@@ -103,15 +107,17 @@ class VodRepository @Inject constructor(
         }
     }
 
-    suspend fun getCategories(baseUrl: String): Result<VodApiResponse> = withContext(Dispatchers.IO) {
+    suspend fun getCategories(
+        baseUrl: String,
+        timeoutMs: Long = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
+    ): Result<VodApiResponse> = withContext(Dispatchers.IO) {
         try {
-            val url = "$baseUrl?ac=videolist&pg=1"
-            Log.d(TAG, "getCategories - URL: $url")
-
-            val response = apiService.getVodList(
-                url = baseUrl,
-                page = 1
-            )
+            val response = withTimeout(timeoutMs.milliseconds) {
+                apiService.getVodList(
+                    url = baseUrl,
+                    page = 1
+                )
+            }
             Log.d(TAG, "getCategories - Response: code=${response.code}, classSize=${response.`class`?.size}")
             Result.success(response)
         } catch (e: Exception) {
@@ -122,7 +128,7 @@ class VodRepository @Inject constructor(
 
     suspend fun checkVideoSite(
         baseUrl: String,
-        timeoutMs: Long = VIDEO_SITE_CHECK_TIMEOUT_MS
+        timeoutMs: Long = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
     ): Result<VideoSiteCheckResponse> = withContext(Dispatchers.IO) {
         try {
             withTimeout(timeoutMs.milliseconds) {
@@ -281,6 +287,7 @@ class VodRepository @Inject constructor(
         cacheKey: String,
         forceRefresh: Boolean,
         label: String,
+        timeoutMs: Long,
         block: suspend () -> VodApiResponse
     ): Result<VodApiResponse> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
@@ -294,13 +301,13 @@ class VodRepository @Inject constructor(
         }
 
         try {
-            val response = withTimeout(REQUEST_TIMEOUT_MS) {
+            val response = withTimeout(timeoutMs.milliseconds) {
                 block()
             }
             responseCache[cacheKey] = CachedResponse(response, System.currentTimeMillis())
             Result.success(response)
         } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "$label - Timeout after ${REQUEST_TIMEOUT_MS}ms: $cacheKey")
+            Log.w(TAG, "$label - Timeout after ${timeoutMs}ms: $cacheKey")
             Result.failure(e)
         } catch (e: CancellationException) {
             throw e

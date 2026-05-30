@@ -11,20 +11,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -32,6 +31,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,6 +48,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,8 +67,10 @@ fun SettingsScreen(
 ) {
     var showResetDialog by remember { mutableStateOf(false) }
     var showDisclaimerDialog by remember { mutableStateOf(false) }
+    var showNetworkSettingsDialog by remember { mutableStateOf(false) }
     val maintenanceMessage by viewModel.maintenanceMessage.collectAsState()
     val updateUiState by viewModel.updateUiState.collectAsState()
+    val networkSettings by viewModel.networkSettings.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(updateUiState.installFile) {
@@ -84,7 +87,7 @@ fun SettingsScreen(
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 18.dp),
+            contentPadding = PaddingValues(start = 14.dp, top = 8.dp, end = 14.dp, bottom = 14.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             item {
@@ -94,7 +97,7 @@ fun SettingsScreen(
                     fontSize = 18.sp,
                     lineHeight = 22.sp,
                     fontWeight = FontWeight.Black,
-                    modifier = Modifier.padding(bottom = 10.dp)
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
 
@@ -105,6 +108,12 @@ fun SettingsScreen(
                         title = "播放历史",
                         subtitle = "继续观看、进度同步、最近播放",
                         onClick = onNavigateToHistory
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.NetworkCheck,
+                        title = "网络设置",
+                        subtitle = "检测超时、播放切线、自动检测",
+                        onClick = { showNetworkSettingsDialog = true }
                     )
                     SettingsItem(
                         icon = Icons.Default.VideoLibrary,
@@ -144,6 +153,67 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    if (showNetworkSettingsDialog) {
+        var videoTimeout by remember(networkSettings) {
+            mutableStateOf(networkSettings.videoSourceTimeoutSeconds.toString())
+        }
+        var liveTimeout by remember(networkSettings) {
+            mutableStateOf(networkSettings.liveSourceTimeoutSeconds.toString())
+        }
+        var autoCheckInterval by remember(networkSettings) {
+            mutableStateOf(networkSettings.autoCheckIntervalMinutes?.toString().orEmpty())
+        }
+
+        AlertDialog(
+            onDismissRequest = { showNetworkSettingsDialog = false },
+            containerColor = AppColors.Surface,
+            titleContentColor = AppColors.TextPrimary,
+            textContentColor = AppColors.TextSecondary,
+            title = { Text("网络设置") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    NetworkNumberField(
+                        value = videoTimeout,
+                        label = "视频源超时（秒）",
+                        onValueChange = { videoTimeout = it }
+                    )
+                    NetworkNumberField(
+                        value = liveTimeout,
+                        label = "直播源超时（秒）",
+                        onValueChange = { liveTimeout = it }
+                    )
+                    NetworkNumberField(
+                        value = autoCheckInterval,
+                        label = "自动检测视频源（分钟，可留空）",
+                        onValueChange = { autoCheckInterval = it }
+                    )
+                    Text(
+                        text = "搜索、源检测、播放自动切换都会使用这里的超时时间。",
+                        color = AppColors.TextTertiary,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (viewModel.saveNetworkSettings(videoTimeout, liveTimeout, autoCheckInterval)) {
+                            showNetworkSettingsDialog = false
+                        }
+                    }
+                ) {
+                    Text("保存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNetworkSettingsDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     if (showResetDialog) {
@@ -281,6 +351,24 @@ fun SettingsScreen(
 }
 
 @Composable
+private fun NetworkNumberField(
+    value: String,
+    label: String,
+    onValueChange: (String) -> Unit
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { input ->
+            onValueChange(input.filter { it.isDigit() })
+        },
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+    )
+}
+
+@Composable
 private fun VersionLine(
     label: String,
     value: String
@@ -357,12 +445,12 @@ private fun SettingsItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(15.dp),
+                .padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(32.dp)
                     .clip(RoundedCornerShape(4.dp))
                     .background(AppColors.PrimaryLight),
                 contentAlignment = Alignment.Center
@@ -371,38 +459,42 @@ private fun SettingsItem(
                     imageVector = icon,
                     contentDescription = null,
                     tint = AppColors.Primary,
-                    modifier = Modifier.size(21.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+                    .padding(horizontal = 9.dp),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
             ) {
                 Text(
                     text = title,
                     color = AppColors.TextPrimary,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
+                    lineHeight = 17.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = subtitle,
                     color = AppColors.TextTertiary,
-                    fontSize = 11.sp
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 tint = AppColors.TextSecondary,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
 
         if (showDivider) {
             HorizontalDivider(
-                modifier = Modifier.padding(start = 70.dp),
+                modifier = Modifier.padding(start = 52.dp),
                 color = AppColors.Divider
             )
         }

@@ -347,13 +347,6 @@ private fun buildHomeVodMeta(item: HomeVodItem): String {
         item.vod.type_name,
         item.vod.vod_year
     ).joinToString(" · ")
-    val sourceMeta = if (item.sourceCount > 1) {
-        item.sourceNames.take(3).joinToString(" / ")
-    } else {
-        item.siteName
-    }
-    return listOf(baseMeta, sourceMeta)
-        .filter { it.isNotBlank() }
-        .joinToString(" · ")
+    return baseMeta
         .ifBlank { "影视 · 在线" }
 }

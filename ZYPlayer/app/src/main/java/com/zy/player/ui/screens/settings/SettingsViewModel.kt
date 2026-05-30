@@ -8,6 +8,8 @@ import com.zy.player.data.repository.AppUpdateInfo
 import com.zy.player.data.repository.AppUpdateRepository
 import com.zy.player.data.repository.HistoryRepository
 import com.zy.player.data.repository.LiveRepository
+import com.zy.player.data.repository.NetworkSettings
+import com.zy.player.data.repository.NetworkSettingsRepository
 import com.zy.player.data.repository.SiteRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
@@ -32,13 +34,39 @@ class SettingsViewModel @Inject constructor(
     private val historyRepository: HistoryRepository,
     private val siteRepository: SiteRepository,
     private val liveRepository: LiveRepository,
-    private val appUpdateRepository: AppUpdateRepository
+    private val appUpdateRepository: AppUpdateRepository,
+    private val networkSettingsRepository: NetworkSettingsRepository
 ) : ViewModel() {
     private val _maintenanceMessage = MutableStateFlow<String?>(null)
     val maintenanceMessage: StateFlow<String?> = _maintenanceMessage.asStateFlow()
 
     private val _updateUiState = MutableStateFlow(SettingsUpdateUiState())
     val updateUiState: StateFlow<SettingsUpdateUiState> = _updateUiState.asStateFlow()
+
+    val networkSettings: StateFlow<NetworkSettings> = networkSettingsRepository.settings
+
+    fun saveNetworkSettings(
+        videoTimeoutSeconds: String,
+        liveTimeoutSeconds: String,
+        autoCheckIntervalMinutes: String
+    ): Boolean {
+        val videoTimeout = videoTimeoutSeconds.trim().toIntOrNull()
+        val liveTimeout = liveTimeoutSeconds.trim().toIntOrNull()
+        val autoCheckInterval = autoCheckIntervalMinutes.trim().takeIf { it.isNotBlank() }?.toIntOrNull()
+
+        if (videoTimeout == null || liveTimeout == null || autoCheckIntervalMinutes.trim().let { it.isNotBlank() && autoCheckInterval == null }) {
+            _maintenanceMessage.value = "网络设置保存失败：请输入有效数字。"
+            return false
+        }
+
+        networkSettingsRepository.updateSettings(
+            videoTimeoutSeconds = videoTimeout,
+            liveTimeoutSeconds = liveTimeout,
+            autoCheckIntervalMinutes = autoCheckInterval
+        )
+        _maintenanceMessage.value = "网络设置已保存。"
+        return true
+    }
 
     fun resetApp() {
         viewModelScope.launch {

@@ -4,18 +4,22 @@ import com.zy.player.data.local.dao.LiveSourceDao
 import com.zy.player.data.local.DefaultSources
 import com.zy.player.data.local.entity.LiveSourceEntity
 import com.zy.player.domain.model.LiveChannel
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class LiveRepository @Inject constructor(
     private val liveSourceDao: LiveSourceDao,
-    private val okHttpClient: OkHttpClient
+    private val okHttpClient: OkHttpClient,
+    private val networkSettingsRepository: NetworkSettingsRepository
 ) {
     fun observeAllSources(): Flow<List<LiveSourceEntity>> = liveSourceDao.observeAll()
 
@@ -54,60 +58,74 @@ class LiveRepository @Inject constructor(
         }
     }
 
-    suspend fun fetchAndParseChannels(url: String): Result<List<LiveChannel>> = withContext(Dispatchers.IO) {
+    suspend fun fetchAndParseChannels(
+        url: String,
+        timeoutMs: Long = networkSettingsRepository.currentSettings().liveSourceTimeoutMs
+    ): Result<List<LiveChannel>> = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder().url(url).build()
-            val response = okHttpClient.newCall(request).execute()
+            withTimeout(timeoutMs.milliseconds) {
+                val request = Request.Builder().url(url).build()
+                val response = okHttpClient.newCall(request).apply {
+                    timeout().timeout(timeoutMs, TimeUnit.MILLISECONDS)
+                }.execute()
 
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                if (!response.isSuccessful) {
+                    return@withTimeout Result.failure(Exception("HTTP ${response.code}"))
+                }
+
+                val content = response.body?.string() ?: ""
+                val channels = parseM3U(content, url)
+                Result.success(channels)
             }
-
-            val content = response.body?.string() ?: ""
-            val channels = parseM3U(content, url)
-            Result.success(channels)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun checkLiveSource(url: String): Result<LiveSourceCheckResponse> = withContext(Dispatchers.IO) {
+    suspend fun checkLiveSource(
+        url: String,
+        timeoutMs: Long = networkSettingsRepository.currentSettings().liveSourceTimeoutMs
+    ): Result<LiveSourceCheckResponse> = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder().url(url).build()
-            okHttpClient.newCall(request).execute().use { response ->
-                val content = response.body?.string().orEmpty()
+            withTimeout(timeoutMs.milliseconds) {
+                val request = Request.Builder().url(url).build()
+                okHttpClient.newCall(request).apply {
+                    timeout().timeout(timeoutMs, TimeUnit.MILLISECONDS)
+                }.execute().use { response ->
+                    val content = response.body?.string().orEmpty()
 
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(
-                        SourceHttpException(
-                            statusCode = response.code,
-                            message = "HTTP ${response.code}",
-                            rawContent = content
+                    if (!response.isSuccessful) {
+                        return@withTimeout Result.failure(
+                            SourceHttpException(
+                                statusCode = response.code,
+                                message = "HTTP ${response.code}",
+                                rawContent = content
+                            )
+                        )
+                    }
+
+                    if (content.isBlank()) {
+                        return@withTimeout Result.failure(
+                            SourceDataException("接口返回内容为空", rawContent = content)
+                        )
+                    }
+
+                    val channels = parseM3U(content, url)
+                    if (channels.isEmpty()) {
+                        return@withTimeout Result.failure(
+                            SourceDataException("接口返回内容无法解析出频道", rawContent = content)
+                        )
+                    }
+
+                    Result.success(
+                        LiveSourceCheckResponse(
+                            httpCode = response.code,
+                            contentType = response.header("Content-Type"),
+                            rawContent = content,
+                            channels = channels
                         )
                     )
                 }
-
-                if (content.isBlank()) {
-                    return@withContext Result.failure(
-                        SourceDataException("接口返回内容为空", rawContent = content)
-                    )
-                }
-
-                val channels = parseM3U(content, url)
-                if (channels.isEmpty()) {
-                    return@withContext Result.failure(
-                        SourceDataException("接口返回内容无法解析出频道", rawContent = content)
-                    )
-                }
-
-                Result.success(
-                    LiveSourceCheckResponse(
-                        httpCode = response.code,
-                        contentType = response.header("Content-Type"),
-                        rawContent = content,
-                        channels = channels
-                    )
-                )
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -119,6 +137,7 @@ class LiveRepository @Inject constructor(
         val lines = content.lines()
         var currentGroup = "默认"
         var currentName: String? = null
+        var currentLogo = ""
 
         for (line in lines) {
             val trimmed = line.trim()
@@ -126,10 +145,12 @@ class LiveRepository @Inject constructor(
                 trimmed.startsWith("#EXTINF:") -> {
                     // Parse #EXTINF:-1 tvg-name="CCTV1" tvg-logo="..." group-title="央视",CCTV1综合
                     val nameMatch = """tvg-name="([^"]+)"""".toRegex().find(trimmed)
+                    val logoMatch = """tvg-logo="([^"]+)"""".toRegex().find(trimmed)
                     val groupMatch = """group-title="([^"]+)"""".toRegex().find(trimmed)
                     val labelMatch = trimmed.substringAfterLast(",", "")
 
                     currentName = nameMatch?.groupValues?.get(1) ?: labelMatch.ifBlank { null }
+                    currentLogo = logoMatch?.groupValues?.get(1).orEmpty()
                     currentGroup = groupMatch?.groupValues?.get(1) ?: "默认"
                 }
                 trimmed.startsWith("http") && currentName != null -> {
@@ -138,8 +159,9 @@ class LiveRepository @Inject constructor(
                         trimmed.contains(".flv") -> "flv"
                         else -> "unknown"
                     }
-                    channels.add(LiveChannel(currentName, trimmed, currentGroup, format))
+                    channels.add(LiveChannel(currentName, trimmed, currentGroup, format, currentLogo))
                     currentName = null
+                    currentLogo = ""
                 }
                 trimmed.contains(",") && !trimmed.startsWith("#") -> {
                     // Simple format: 频道名,http://url
