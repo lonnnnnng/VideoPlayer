@@ -50,6 +50,8 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
@@ -96,6 +98,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.zy.player.R
 import com.zy.player.ui.components.CinemaBackground
+import com.zy.player.ui.components.NetworkImage
 import com.zy.player.ui.theme.AppColors
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -955,6 +958,159 @@ fun LivePlayerScreen(
 }
 
 @Composable
+fun RadioPlayerScreen(
+    url: String,
+    title: String,
+    group: String,
+    codec: String,
+    bitrate: Int,
+    logo: String,
+    sourceId: Long,
+    onNavigateBack: () -> Unit,
+    viewModel: RadioPlayerViewModel = hiltViewModel()
+) {
+    @Suppress("UNUSED_VARIABLE")
+    val unusedRouteArgs = url to sourceId
+    val context = LocalContext.current
+    val clipboardManager = remember(context) {
+        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    }
+
+    val isPlaying by viewModel.isPlaying.collectAsState()
+    val currentPositionState = viewModel.currentPosition.collectAsState()
+    val activeRadioUrlState = viewModel.activeRadioUrl.collectAsState()
+    val playbackUiState by viewModel.playbackUiState.collectAsState()
+    val playbackStatsState = viewModel.playbackStats.collectAsState()
+
+    var isLeaving by remember { mutableStateOf(false) }
+    val leavePlayer = {
+        if (!isLeaving) {
+            isLeaving = true
+            viewModel.stopPlayback()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            if (!isLeaving) {
+                viewModel.stopPlayback()
+            }
+        }
+    }
+
+    LaunchedEffect(isLeaving) {
+        if (isLeaving) {
+            withFrameNanos { }
+            onNavigateBack()
+        }
+    }
+
+    BackHandler { leavePlayer() }
+
+    if (isLeaving) {
+        CinemaBackground(modifier = Modifier.fillMaxSize()) {}
+        return
+    }
+
+    CinemaBackground(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            PlayerEpisodeTopBar(
+                title = title.ifBlank { "网络电台" },
+                onNavigateBack = leavePlayer
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                RadioHeroPanel(
+                    title = title,
+                    group = group,
+                    codec = codec,
+                    bitrate = bitrate,
+                    logo = logo,
+                    playbackUiState = playbackUiState
+                )
+
+                RadioPlaybackInfo(
+                    title = title,
+                    group = group,
+                    codec = codec,
+                    bitrate = bitrate,
+                    radioUrlState = activeRadioUrlState,
+                    currentPositionState = currentPositionState,
+                    playbackUiState = playbackUiState,
+                    playbackStatsState = playbackStatsState,
+                    onCopyClick = { radioUrl ->
+                        copyPlayerSourceLink(
+                            context = context,
+                            clipboardManager = clipboardManager,
+                            url = radioUrl
+                        )
+                    }
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        onClick = {
+                            if (playbackUiState.isFailed) {
+                                viewModel.retryPlayback()
+                            } else {
+                                viewModel.togglePlayPause()
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp),
+                        color = AppColors.Primary,
+                        contentColor = AppColors.OnPrimary,
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = when {
+                                    playbackUiState.isFailed -> "重试"
+                                    isPlaying -> "暂停"
+                                    else -> "播放"
+                                },
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+
+                    PlayerUtilityButton(
+                        icon = Icons.Default.Refresh,
+                        label = "重连",
+                        onClick = viewModel::retryPlayback,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp),
+                        shape = RoundedCornerShape(4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun EpisodePlaybackInfo(
     episodeUrlState: State<String>,
     currentPositionState: State<Long>,
@@ -1049,6 +1205,151 @@ private fun LivePlaybackInfo(
     PlayerSourceLinkRow(
         url = liveUrl,
         onCopyClick = { onCopyClick(liveUrl) }
+    )
+}
+
+@Composable
+private fun RadioHeroPanel(
+    title: String,
+    group: String,
+    codec: String,
+    bitrate: Int,
+    logo: String,
+    playbackUiState: PlaybackUiState
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = AppColors.Surface,
+        contentColor = AppColors.TextPrimary,
+        shape = RoundedCornerShape(4.dp),
+        border = BorderStroke(1.dp, AppColors.Divider)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(92.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                AppColors.Primary,
+                                AppColors.Accent
+                            )
+                        )
+                    )
+                    .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (logo.isNotBlank()) {
+                    NetworkImage(
+                        url = logo,
+                        contentDescription = "${title.ifBlank { "网络电台" }}台标",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(10.dp),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Radio,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(42.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Text(
+                    text = title.ifBlank { "网络电台" },
+                    color = AppColors.TextPrimary,
+                    fontSize = 18.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = listOf(
+                        group,
+                        codec,
+                        bitrate.takeIf { it > 0 }?.let { "${it}kbps" }
+                    ).filter { !it.isNullOrBlank() }.joinToString(" · ").ifBlank { "在线音频流" },
+                    color = AppColors.TextSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = playbackUiState.message,
+                    color = if (playbackUiState.isFailed) AppColors.Error else AppColors.Primary,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RadioPlaybackInfo(
+    title: String,
+    group: String,
+    codec: String,
+    bitrate: Int,
+    radioUrlState: State<String>,
+    currentPositionState: State<Long>,
+    playbackUiState: PlaybackUiState,
+    playbackStatsState: State<PlaybackStats>,
+    onCopyClick: (String) -> Unit
+) {
+    val radioUrl = radioUrlState.value
+    val currentPosition = currentPositionState.value
+    val sourceLabel = remember(radioUrl) { playerSourceLabel(radioUrl) }
+
+    Text(
+        text = radioPlayerSubtitle(
+            title = title,
+            group = group,
+            sourceLabel = sourceLabel,
+            playbackUiState = playbackUiState
+        ),
+        color = AppColors.TextSecondary,
+        fontSize = 13.sp,
+        lineHeight = 20.sp
+    )
+
+    PlayerProgressBar(
+        currentPosition = 0L,
+        duration = 0L
+    )
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PlayerMetaPill(formatTime(currentPosition))
+        PlayerMetaPill(codec.ifBlank { "AUDIO" })
+        PlayerMetaPill(bitrate.takeIf { it > 0 }?.let { "${it}kbps" } ?: sourceLabel)
+    }
+
+    RadioStatsRow(
+        codec = codec,
+        bitrate = bitrate,
+        networkSpeedBitsPerSecond = playbackStatsState.value.networkSpeedBitsPerSecond
+    )
+
+    PlayerSourceLinkRow(
+        url = radioUrl,
+        onCopyClick = { onCopyClick(radioUrl) }
     )
 }
 
@@ -1716,6 +2017,34 @@ private fun PlaybackStatsRow(stats: PlaybackStats) {
 }
 
 @Composable
+private fun RadioStatsRow(
+    codec: String,
+    bitrate: Int,
+    networkSpeedBitsPerSecond: Long
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        PlayerStatsCell(
+            label = "格式",
+            value = codec.ifBlank { "AUDIO" },
+            modifier = Modifier.weight(1f)
+        )
+        PlayerStatsCell(
+            label = "码率",
+            value = bitrate.takeIf { it > 0 }?.let { "${it} Kbps" } ?: "待获取",
+            modifier = Modifier.weight(1f)
+        )
+        PlayerStatsCell(
+            label = "网速",
+            value = formatTransferSpeed(networkSpeedBitsPerSecond),
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
 private fun PlayerStatsCell(
     label: String,
     value: String,
@@ -2147,6 +2476,21 @@ private fun livePlayerSubtitle(
         .filter { it.isNotBlank() }
         .joinToString(" · ")
     return if (meta.isBlank()) "直播线路已接入" else "$meta · 直播线路已接入"
+}
+
+private fun radioPlayerSubtitle(
+    title: String,
+    group: String,
+    sourceLabel: String,
+    playbackUiState: PlaybackUiState
+): String {
+    if (playbackUiState.isRecovering || playbackUiState.isFailed) {
+        return playbackUiState.message
+    }
+    val meta = listOf(title, group, sourceLabel)
+        .filter { it.isNotBlank() }
+        .joinToString(" · ")
+    return if (meta.isBlank()) "电台音频流已接入" else "$meta · 电台音频流已接入"
 }
 
 private fun playerSourceLabel(episodeUrl: String): String {

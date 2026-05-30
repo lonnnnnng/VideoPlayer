@@ -5,6 +5,8 @@ import androidx.room.Room
 import com.zy.player.data.local.AppDatabase
 import com.zy.player.data.local.dao.HistoryDao
 import com.zy.player.data.local.dao.LiveSourceDao
+import com.zy.player.data.local.dao.PodcastSubscriptionDao
+import com.zy.player.data.local.dao.RadioSourceDao
 import com.zy.player.data.local.dao.VideoSiteDao
 import com.zy.player.data.remote.VodApiService
 import com.google.gson.Gson
@@ -37,7 +39,9 @@ object AppModule {
                 AppDatabase.MIGRATION_2_3,
                 AppDatabase.MIGRATION_3_4,
                 AppDatabase.MIGRATION_4_5,
-                AppDatabase.MIGRATION_5_6
+                AppDatabase.MIGRATION_5_6,
+                AppDatabase.MIGRATION_6_7,
+                AppDatabase.MIGRATION_7_8
             )
             .build()
     }
@@ -58,6 +62,18 @@ object AppModule {
     @Singleton
     fun provideLiveSourceDao(database: AppDatabase): LiveSourceDao {
         return database.liveSourceDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideRadioSourceDao(database: AppDatabase): RadioSourceDao {
+        return database.radioSourceDao()
+    }
+
+    @Provides
+    @Singleton
+    fun providePodcastSubscriptionDao(database: AppDatabase): PodcastSubscriptionDao {
+        return database.podcastSubscriptionDao()
     }
 
     @Provides

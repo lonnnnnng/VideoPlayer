@@ -4,6 +4,7 @@ import com.google.gson.JsonSyntaxException
 import com.google.gson.stream.MalformedJsonException
 import com.zy.player.data.remote.VodApiResponse
 import com.zy.player.domain.model.LiveChannel
+import com.zy.player.domain.model.RadioStation
 import retrofit2.HttpException
 import java.io.EOFException
 import java.io.IOException
@@ -13,6 +14,13 @@ data class LiveSourceCheckResponse(
     val contentType: String?,
     val rawContent: String,
     val channels: List<LiveChannel>
+)
+
+data class RadioSourceCheckResponse(
+    val httpCode: Int,
+    val contentType: String?,
+    val rawContent: String,
+    val stations: List<RadioStation>
 )
 
 data class VideoSiteCheckResponse(

@@ -10,6 +10,7 @@ import com.zy.player.data.repository.HistoryRepository
 import com.zy.player.data.repository.LiveRepository
 import com.zy.player.data.repository.NetworkSettings
 import com.zy.player.data.repository.NetworkSettingsRepository
+import com.zy.player.data.repository.RadioRepository
 import com.zy.player.data.repository.SiteRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.File
@@ -34,6 +35,7 @@ class SettingsViewModel @Inject constructor(
     private val historyRepository: HistoryRepository,
     private val siteRepository: SiteRepository,
     private val liveRepository: LiveRepository,
+    private val radioRepository: RadioRepository,
     private val appUpdateRepository: AppUpdateRepository,
     private val networkSettingsRepository: NetworkSettingsRepository
 ) : ViewModel() {
@@ -74,8 +76,9 @@ class SettingsViewModel @Inject constructor(
                 historyRepository.clearAllHistory()
                 siteRepository.resetToDefaults()
                 liveRepository.resetToDefaults()
+                radioRepository.resetToDefaults()
             }.onSuccess {
-                _maintenanceMessage.value = "已清空播放历史，并恢复默认视频源与直播源。"
+                _maintenanceMessage.value = "已清空播放历史，并恢复默认视频源、直播源与电台源。"
             }.onFailure { error ->
                 _maintenanceMessage.value = "重置失败：${error.message ?: "未知错误"}"
             }

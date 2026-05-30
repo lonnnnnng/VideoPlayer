@@ -1522,3 +1522,234 @@ class LivePlayerViewModel @Inject constructor(
         playerManager.removeListener(playerListener)
     }
 }
+
+@HiltViewModel
+class RadioPlayerViewModel @Inject constructor(
+    private val playerManager: PlayerManager,
+    savedStateHandle: SavedStateHandle
+) : ViewModel() {
+
+    companion object {
+        private const val TAG = "RadioPlayerViewModel"
+        private const val NETWORK_SPEED_UPDATE_INTERVAL_MS = 1_000L
+        private const val NETWORK_SPEED_WINDOW_MS = 3_000L
+    }
+
+    private val radioUrl: String = savedStateHandle.get<String>("url") ?: ""
+    private val radioTitle: String = savedStateHandle.get<String>("title").orEmpty()
+
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    private val _currentPosition = MutableStateFlow(0L)
+    val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
+
+    private val _activeRadioUrl = MutableStateFlow(radioUrl)
+    val activeRadioUrl: StateFlow<String> = _activeRadioUrl.asStateFlow()
+
+    private val _playbackUiState = MutableStateFlow(
+        PlaybackUiState(
+            sourceName = radioTitle.ifBlank { "网络电台" },
+            message = "正在连接电台",
+            isRecovering = true
+        )
+    )
+    val playbackUiState: StateFlow<PlaybackUiState> = _playbackUiState.asStateFlow()
+
+    private val _playbackStats = MutableStateFlow(PlaybackStats())
+    val playbackStats: StateFlow<PlaybackStats> = _playbackStats.asStateFlow()
+
+    private var progressUpdateJob: Job? = null
+    private var networkSpeedUpdateJob: Job? = null
+    private val transferSamples = ArrayDeque<TransferSample>()
+    private val transferSamplesLock = Any()
+
+    private data class TransferSample(
+        val timestampMs: Long,
+        val bytes: Long
+    )
+
+    private val transferByteListener: (Int) -> Unit = { bytes ->
+        recordTransferredBytes(bytes)
+    }
+
+    private val playerListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            _isPlaying.value = isPlaying
+            if (isPlaying) {
+                startProgressUpdates()
+            } else {
+                stopProgressUpdates()
+            }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            val sourceName = radioTitle.ifBlank { "网络电台" }
+            when (playbackState) {
+                Player.STATE_BUFFERING -> {
+                    _playbackUiState.value = PlaybackUiState(
+                        sourceName = sourceName,
+                        message = "$sourceName 正在缓冲",
+                        isRecovering = true
+                    )
+                }
+                Player.STATE_READY -> {
+                    _playbackUiState.value = PlaybackUiState(
+                        sourceName = sourceName,
+                        message = "$sourceName 已接入",
+                        isRecovering = false
+                    )
+                }
+                Player.STATE_ENDED -> {
+                    _playbackUiState.value = PlaybackUiState(
+                        sourceName = sourceName,
+                        message = "电台流已结束",
+                        isRecovering = false,
+                        isFailed = true
+                    )
+                }
+            }
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            Log.e(TAG, "onPlayerError - errorCode=${error.errorCode}, message=${error.message}", error)
+            _isPlaying.value = false
+            stopProgressUpdates()
+            _playbackUiState.value = PlaybackUiState(
+                sourceName = radioTitle.ifBlank { "网络电台" },
+                message = error.message ?: "电台流不可用",
+                isRecovering = false,
+                isFailed = true
+            )
+        }
+    }
+
+    init {
+        Log.d(TAG, "init - radioUrl=$radioUrl, title=$radioTitle")
+        playerManager.addListener(playerListener)
+        playerManager.addTransferByteListener(transferByteListener)
+        startNetworkSpeedUpdates()
+        if (radioUrl.isNotBlank()) {
+            playRadio()
+        } else {
+            _playbackUiState.value = PlaybackUiState(
+                sourceName = "网络电台",
+                message = "没有可播放的电台地址",
+                isRecovering = false,
+                isFailed = true
+            )
+        }
+    }
+
+    fun togglePlayPause() {
+        if (_isPlaying.value) {
+            playerManager.pause()
+        } else {
+            playerManager.resume()
+        }
+    }
+
+    fun retryPlayback() {
+        if (radioUrl.isBlank()) return
+        playRadio()
+    }
+
+    fun stopPlayback() {
+        Log.d(TAG, "stopPlayback")
+        _isPlaying.value = false
+        stopProgressUpdates()
+        stopNetworkSpeedUpdates()
+        playerManager.stopAndRelease()
+    }
+
+    private fun playRadio() {
+        _activeRadioUrl.value = radioUrl
+        _currentPosition.value = 0L
+        resetNetworkSpeedSamples()
+        _playbackStats.value = PlaybackStats()
+        _playbackUiState.value = PlaybackUiState(
+            sourceName = radioTitle.ifBlank { "网络电台" },
+            message = "正在连接 ${radioTitle.ifBlank { "网络电台" }}",
+            isRecovering = true
+        )
+        playerManager.play(radioUrl)
+    }
+
+    private fun startProgressUpdates() {
+        progressUpdateJob?.cancel()
+        progressUpdateJob = viewModelScope.launch {
+            while (isActive) {
+                _currentPosition.value = playerManager.getCurrentPosition()
+                delay(500)
+            }
+        }
+    }
+
+    private fun stopProgressUpdates() {
+        progressUpdateJob?.cancel()
+    }
+
+    private fun startNetworkSpeedUpdates() {
+        networkSpeedUpdateJob?.cancel()
+        networkSpeedUpdateJob = viewModelScope.launch {
+            while (isActive) {
+                publishMeasuredNetworkSpeed()
+                delay(NETWORK_SPEED_UPDATE_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun stopNetworkSpeedUpdates() {
+        networkSpeedUpdateJob?.cancel()
+        networkSpeedUpdateJob = null
+    }
+
+    private fun recordTransferredBytes(bytes: Int) {
+        if (bytes <= 0) return
+        val now = SystemClock.elapsedRealtime()
+        synchronized(transferSamplesLock) {
+            transferSamples += TransferSample(now, bytes.toLong())
+            pruneTransferSamplesLocked(now)
+        }
+    }
+
+    private fun resetNetworkSpeedSamples() {
+        synchronized(transferSamplesLock) {
+            transferSamples.clear()
+        }
+    }
+
+    private fun publishMeasuredNetworkSpeed() {
+        val now = SystemClock.elapsedRealtime()
+        val speedBitsPerSecond = synchronized(transferSamplesLock) {
+            pruneTransferSamplesLocked(now)
+            val totalBytes = transferSamples.sumOf { it.bytes }
+            if (totalBytes <= 0L) {
+                0L
+            } else {
+                val firstSampleTime = transferSamples.first().timestampMs
+                val windowMs = (now - firstSampleTime).coerceAtLeast(NETWORK_SPEED_UPDATE_INTERVAL_MS)
+                totalBytes.coerceAtMost(Long.MAX_VALUE / 8_000L) * 8_000L / windowMs
+            }
+        }
+
+        _playbackStats.value = _playbackStats.value.copy(
+            networkSpeedBitsPerSecond = speedBitsPerSecond
+        )
+    }
+
+    private fun pruneTransferSamplesLocked(now: Long) {
+        while (transferSamples.isNotEmpty() && now - transferSamples.first().timestampMs > NETWORK_SPEED_WINDOW_MS) {
+            transferSamples.removeFirst()
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopProgressUpdates()
+        stopNetworkSpeedUpdates()
+        playerManager.stopAndRelease()
+        playerManager.removeTransferByteListener(transferByteListener)
+        playerManager.removeListener(playerListener)
+    }
+}

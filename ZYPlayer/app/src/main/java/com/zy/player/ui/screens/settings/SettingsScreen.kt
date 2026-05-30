@@ -22,8 +22,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -61,8 +64,11 @@ import java.io.File
 @Composable
 fun SettingsScreen(
     onNavigateToHistory: () -> Unit,
+    onNavigateToOnline: () -> Unit,
+    onNavigateToPodcast: () -> Unit,
     onNavigateToSiteManagement: () -> Unit,
     onNavigateToLiveSourceManagement: () -> Unit,
+    onNavigateToRadioSourceManagement: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     var showResetDialog by remember { mutableStateOf(false) }
@@ -116,6 +122,18 @@ fun SettingsScreen(
                         onClick = { showNetworkSettingsDialog = true }
                     )
                     SettingsItem(
+                        icon = Icons.Default.Link,
+                        title = "在线播放",
+                        subtitle = "粘贴 m3u8 或 m3u 链接解析播放",
+                        onClick = onNavigateToOnline
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.Podcasts,
+                        title = "播客",
+                        subtitle = "粘贴 RSS 订阅并播放音频节目",
+                        onClick = onNavigateToPodcast
+                    )
+                    SettingsItem(
                         icon = Icons.Default.VideoLibrary,
                         title = "视频源管理",
                         subtitle = "资源站排序、检测、启用状态",
@@ -126,6 +144,12 @@ fun SettingsScreen(
                         title = "直播源管理",
                         subtitle = "M3U 源、频道解析、线路刷新",
                         onClick = onNavigateToLiveSourceManagement,
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.Radio,
+                        title = "电台源管理",
+                        subtitle = "M3U、PLS、JSON、网络电台源",
+                        onClick = onNavigateToRadioSourceManagement,
                     )
                     SettingsItem(
                         icon = Icons.Default.Download,

@@ -1,9 +1,7 @@
 package com.zy.player.ui.screens.home
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +37,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.components.CinemaMessage
@@ -48,7 +45,7 @@ import com.zy.player.ui.components.NetworkImage
 import com.zy.player.ui.components.ShimmerEffect
 import com.zy.player.ui.theme.AppColors
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToSearch: () -> Unit,
@@ -88,96 +85,96 @@ fun HomeScreen(
             onRefresh = viewModel::refresh,
             modifier = Modifier.fillMaxSize(),
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                stickyHeader {
-                    HomeStickyHeader(
-                        onSearchClick = onNavigateToSearch
-                    )
-                }
+            Column(modifier = Modifier.fillMaxSize()) {
+                HomeFixedHeader(
+                    onSearchClick = onNavigateToSearch
+                )
 
-                when (val state = uiState) {
-                    is HomeUiState.Loading -> {
-                        homeSkeletonGrid()
-                    }
-                    is HomeUiState.Error -> {
-                        item {
-                            CinemaMessage(
-                                title = "片库连接失败",
-                                message = state.message,
-                                actionText = "重试",
-                                onAction = viewModel::refresh
-                            )
-                        }
-                    }
-                    is HomeUiState.Empty -> {
-                        item {
-                            CinemaMessage(
-                                title = "暂无影片",
-                                message = "当前启用的视频源没有返回内容，试试检查视频源配置。"
-                            )
-                        }
-                    }
-                    is HomeUiState.Success -> {
-                        if (state.isRefreshing) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    when (val state = uiState) {
+                        is HomeUiState.Loading -> {
                             homeSkeletonGrid()
-                        } else {
-                            val rows = successRows
-                            state.warningMessage?.let { warning ->
-                                item {
-                                    Text(
-                                        text = warning,
-                                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp),
-                                        color = AppColors.TextTertiary,
-                                        fontSize = 12.sp,
-                                        lineHeight = 16.sp
-                                    )
-                                }
+                        }
+                        is HomeUiState.Error -> {
+                            item {
+                                CinemaMessage(
+                                    title = "片库连接失败",
+                                    message = state.message,
+                                    actionText = "重试",
+                                    onAction = viewModel::refresh
+                                )
                             }
-
-                            items(
-                                items = rows,
-                                key = { row -> row.joinToString(separator = "-") { it.key } },
-                                contentType = { "home-vod-row" }
-                            ) { row ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    row.forEach { item ->
-                                        CinemaVodPoster(
-                                            item = item,
-                                            onClick = {
-                                                onNavigateToDetail(item.siteId, item.vod.vod_id.toString())
-                                            },
-                                            modifier = Modifier.weight(1f)
+                        }
+                        is HomeUiState.Empty -> {
+                            item {
+                                CinemaMessage(
+                                    title = "暂无影片",
+                                    message = "当前启用的视频源没有返回内容，试试检查视频源配置。"
+                                )
+                            }
+                        }
+                        is HomeUiState.Success -> {
+                            if (state.isRefreshing) {
+                                homeSkeletonGrid()
+                            } else {
+                                val rows = successRows
+                                state.warningMessage?.let { warning ->
+                                    item {
+                                        Text(
+                                            text = warning,
+                                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp),
+                                            color = AppColors.TextTertiary,
+                                            fontSize = 12.sp,
+                                            lineHeight = 16.sp
                                         )
                                     }
-                                    repeat(3 - row.size) {
-                                        Spacer(modifier = Modifier.weight(1f))
+                                }
+
+                                items(
+                                    items = rows,
+                                    key = { row -> row.joinToString(separator = "-") { it.key } },
+                                    contentType = { "home-vod-row" }
+                                ) { row ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        row.forEach { item ->
+                                            CinemaVodPoster(
+                                                item = item,
+                                                onClick = {
+                                                    onNavigateToDetail(item.siteId, item.vod.vod_id.toString())
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                        repeat(3 - row.size) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
                                     }
                                 }
-                            }
 
-                            if (state.isLoadingMore) {
-                                item {
-                                    HomeLoadMoreFooter(
-                                        text = "正在加载更多",
-                                        showProgress = true
-                                    )
-                                }
-                            } else if (!state.hasMore && state.vodList.isNotEmpty()) {
-                                item {
-                                    HomeLoadMoreFooter(
-                                        text = "已经到底了",
-                                        showProgress = false
-                                    )
+                                if (state.isLoadingMore) {
+                                    item {
+                                        HomeLoadMoreFooter(
+                                            text = "正在加载更多",
+                                            showProgress = true
+                                        )
+                                    }
+                                } else if (!state.hasMore && state.vodList.isNotEmpty()) {
+                                    item {
+                                        HomeLoadMoreFooter(
+                                            text = "已经到底了",
+                                            showProgress = false
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -235,13 +232,12 @@ private fun HomeLoadMoreFooter(
 }
 
 @Composable
-private fun HomeStickyHeader(
+private fun HomeFixedHeader(
     onSearchClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .zIndex(1f)
             .background(AppColors.Shell)
             .padding(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 12.dp)
     ) {
@@ -288,70 +284,95 @@ private fun CinemaVodPoster(
     modifier: Modifier = Modifier
 ) {
     val vod = item.vod
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick,
+        color = AppColors.Surface,
+        contentColor = AppColors.TextPrimary,
+        shape = RoundedCornerShape(6.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider),
+        shadowElevation = 1.dp
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(4.dp))
-                .background(AppColors.SurfaceAlt)
-                .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
+                .padding(6.dp)
         ) {
-            NetworkImage(
-                url = vod.vod_pic,
-                contentDescription = vod.vod_name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            if (!vod.vod_remarks.isNullOrBlank()) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp),
-                    color = AppColors.Primary,
-                    contentColor = AppColors.OnPrimary,
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Text(
-                        text = vod.vod_remarks,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black,
-                        maxLines = 1
-                    )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(AppColors.SurfaceAlt)
+            ) {
+                NetworkImage(
+                    url = vod.vod_pic,
+                    contentDescription = vod.vod_name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (!vod.vod_remarks.isNullOrBlank()) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp),
+                        color = AppColors.Primary,
+                        contentColor = AppColors.OnPrimary,
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = vod.vod_remarks,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
+            Text(
+                text = vod.vod_name,
+                modifier = Modifier.padding(top = 8.dp),
+                color = AppColors.TextPrimary,
+                fontSize = 13.sp,
+                lineHeight = 16.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            HomeVodMetaRow(item = item)
         }
+    }
+}
+
+@Composable
+private fun HomeVodMetaRow(item: HomeVodItem) {
+    val typeName = item.vod.type_name?.takeIf { it.isNotBlank() } ?: "影视"
+    val year = item.vod.vod_year?.takeIf { it.isNotBlank() } ?: "在线"
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(
-            text = vod.vod_name,
-            modifier = Modifier.padding(top = 8.dp),
-            color = AppColors.TextPrimary,
-            fontSize = 13.sp,
-            lineHeight = 16.sp,
-            fontWeight = FontWeight.Bold,
+            text = typeName,
+            modifier = Modifier.weight(1f),
+            color = AppColors.TextTertiary,
+            fontSize = 11.sp,
+            lineHeight = 14.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = buildHomeVodMeta(item),
-            modifier = Modifier.padding(top = 3.dp),
+            text = year,
             color = AppColors.TextTertiary,
             fontSize = 11.sp,
+            lineHeight = 14.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
     }
-}
-
-private fun buildHomeVodMeta(item: HomeVodItem): String {
-    val baseMeta = listOfNotNull(
-        item.vod.type_name,
-        item.vod.vod_year
-    ).joinToString(" · ")
-    return baseMeta
-        .ifBlank { "影视 · 在线" }
 }

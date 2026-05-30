@@ -8,10 +8,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,9 +23,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -43,6 +43,10 @@ import com.zy.player.ui.screens.livesource.LiveSourceManagementScreen
 import com.zy.player.ui.screens.online.OnlineScreen
 import com.zy.player.ui.screens.player.EpisodePlayerScreen
 import com.zy.player.ui.screens.player.LivePlayerScreen
+import com.zy.player.ui.screens.player.RadioPlayerScreen
+import com.zy.player.ui.screens.podcast.PodcastScreen
+import com.zy.player.ui.screens.radio.RadioScreen
+import com.zy.player.ui.screens.radiosource.RadioSourceManagementScreen
 import com.zy.player.ui.screens.search.SearchScreen
 import com.zy.player.ui.screens.searchresult.SearchResultScreen
 import com.zy.player.ui.screens.settings.SettingsScreen
@@ -50,10 +54,10 @@ import com.zy.player.ui.screens.sitemanagement.SiteManagementScreen
 import com.zy.player.ui.theme.AppColors
 
 sealed class BottomNavItem(val route: String, val icon: ImageVector, val label: String) {
-    object Home : BottomNavItem(Destinations.HOME, Icons.Default.Home, "首页")
-    object Live : BottomNavItem(Destinations.LIVE, Icons.Default.LiveTv, "直播")
-    object Online : BottomNavItem(Destinations.ONLINE, Icons.Default.Link, "在线")
-    object Settings : BottomNavItem(Destinations.SETTINGS, Icons.Default.Settings, "设置")
+    object Home : BottomNavItem(Destinations.HOME, Icons.Default.VideoLibrary, "片库")
+    object Live : BottomNavItem(Destinations.LIVE, Icons.Default.LiveTv, "电视")
+    object Radio : BottomNavItem(Destinations.RADIO, Icons.Default.Radio, "电台")
+    object Settings : BottomNavItem(Destinations.SETTINGS, Icons.Default.Person, "我的")
 }
 
 @Composable
@@ -63,7 +67,7 @@ fun AppNavGraph(
     val bottomNavItems = listOf(
         BottomNavItem.Home,
         BottomNavItem.Live,
-        BottomNavItem.Online,
+        BottomNavItem.Radio,
         BottomNavItem.Settings
     )
 
@@ -71,7 +75,7 @@ fun AppNavGraph(
     val currentDestination = navBackStackEntry?.destination
     val currentRoute = currentDestination?.route
     val topLevelRoutes = bottomNavItems.map { it.route }
-    val playerRoutes = listOf(Destinations.EPISODE_PLAYER, Destinations.LIVE_PLAYER)
+    val playerRoutes = listOf(Destinations.EPISODE_PLAYER, Destinations.LIVE_PLAYER, Destinations.RADIO_PLAYER)
     val context = LocalContext.current
     val activity = context as? Activity
     var showExitDialog by remember { mutableStateOf(false) }
@@ -134,8 +138,27 @@ fun AppNavGraph(
                 )
             }
 
+            composable(Destinations.RADIO) {
+                RadioScreen(
+                    onNavigateToPlayer = { station, sourceId ->
+                        navController.navigate(
+                            Destinations.radioPlayer(
+                                url = station.url,
+                                title = station.name,
+                                group = station.group,
+                                codec = station.codec,
+                                bitrate = station.bitrate,
+                                logo = station.logo,
+                                sourceId = sourceId ?: 0L
+                            )
+                        )
+                    }
+                )
+            }
+
             composable(Destinations.ONLINE) {
                 OnlineScreen(
+                    onNavigateBack = { navController.popBackStack() },
                     onNavigateToM3u8Player = { url ->
                         navController.navigate(
                             Destinations.episodePlayer(
@@ -160,11 +183,33 @@ fun AppNavGraph(
                 )
             }
 
+            composable(Destinations.PODCAST) {
+                PodcastScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToPlayer = { episode, feedTitle, feedImageUrl ->
+                        navController.navigate(
+                            Destinations.radioPlayer(
+                                url = episode.audioUrl,
+                                title = episode.title,
+                                group = feedTitle,
+                                codec = episode.audioType.ifBlank { "Podcast" },
+                                bitrate = 0,
+                                logo = episode.imageUrl.ifBlank { feedImageUrl },
+                                sourceId = 0L
+                            )
+                        )
+                    }
+                )
+            }
+
             composable(Destinations.SETTINGS) {
                 SettingsScreen(
                     onNavigateToHistory = { navController.navigate(Destinations.HISTORY) },
+                    onNavigateToOnline = { navController.navigate(Destinations.ONLINE) },
+                    onNavigateToPodcast = { navController.navigate(Destinations.PODCAST) },
                     onNavigateToSiteManagement = { navController.navigate(Destinations.SITE_MANAGEMENT) },
-                    onNavigateToLiveSourceManagement = { navController.navigate(Destinations.LIVE_SOURCE_MANAGEMENT) }
+                    onNavigateToLiveSourceManagement = { navController.navigate(Destinations.LIVE_SOURCE_MANAGEMENT) },
+                    onNavigateToRadioSourceManagement = { navController.navigate(Destinations.RADIO_SOURCE_MANAGEMENT) }
                 )
             }
 
@@ -297,6 +342,55 @@ fun AppNavGraph(
                 )
             }
 
+            composable(
+                route = Destinations.RADIO_PLAYER,
+                arguments = listOf(
+                    navArgument("url") { type = NavType.StringType },
+                    navArgument("title") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                    navArgument("group") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                    navArgument("codec") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                    navArgument("bitrate") {
+                        type = NavType.IntType
+                        defaultValue = 0
+                    },
+                    navArgument("logo") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                    navArgument("sourceId") {
+                        type = NavType.LongType
+                        defaultValue = 0L
+                    }
+                )
+            ) { backStackEntry ->
+                val url = backStackEntry.arguments?.getString("url").orEmpty()
+                val title = backStackEntry.arguments?.getString("title").orEmpty()
+                val group = backStackEntry.arguments?.getString("group").orEmpty()
+                val codec = backStackEntry.arguments?.getString("codec").orEmpty()
+                val bitrate = backStackEntry.arguments?.getInt("bitrate") ?: 0
+                val logo = backStackEntry.arguments?.getString("logo").orEmpty()
+                val sourceId = backStackEntry.arguments?.getLong("sourceId") ?: 0L
+                RadioPlayerScreen(
+                    url = url,
+                    title = title,
+                    group = group,
+                    codec = codec,
+                    bitrate = bitrate,
+                    logo = logo,
+                    sourceId = sourceId,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
             composable(Destinations.HISTORY) {
                 HistoryScreen(
                     onNavigateBack = { navController.popBackStack() },
@@ -316,6 +410,12 @@ fun AppNavGraph(
 
             composable(Destinations.LIVE_SOURCE_MANAGEMENT) {
                 LiveSourceManagementScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Destinations.RADIO_SOURCE_MANAGEMENT) {
+                RadioSourceManagementScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -369,43 +469,57 @@ private fun FloatingCinemaNavigationBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(AppColors.Shell.copy(alpha = 0.98f))
+            .background(AppColors.Shell.copy(alpha = 0.96f))
             .border(1.dp, AppColors.Divider)
             .navigationBarsPadding()
-            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
+            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)
     ) {
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                .height(62.dp),
+            color = AppColors.Surface,
+            contentColor = AppColors.TextSecondary,
+            shape = RoundedCornerShape(18.dp),
+            shadowElevation = 4.dp,
+            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider)
         ) {
-            items.forEach { item ->
-                val selected = currentRoute == item.route
-                Surface(
-                    onClick = { onItemClick(item) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                    color = if (selected) AppColors.PrimaryLight else Color.Transparent,
-                    contentColor = if (selected) AppColors.Primary else AppColors.TextTertiary,
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items.forEach { item ->
+                    val selected = currentRoute == item.route
+                    Surface(
+                        onClick = { onItemClick(item) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        color = if (selected) AppColors.PrimaryLight else Color.Transparent,
+                        contentColor = if (selected) AppColors.Primary else AppColors.TextTertiary,
+                        shape = RoundedCornerShape(14.dp)
                     ) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.label,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = item.label,
-                            fontSize = 11.sp,
-                            maxLines = 1
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = item.icon,
+                                contentDescription = item.label,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = item.label,
+                                fontSize = 11.sp,
+                                lineHeight = 13.sp,
+                                fontWeight = if (selected) FontWeight.Black else FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }

@@ -6,24 +6,32 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.zy.player.data.local.dao.HistoryDao
 import com.zy.player.data.local.dao.LiveSourceDao
+import com.zy.player.data.local.dao.PodcastSubscriptionDao
+import com.zy.player.data.local.dao.RadioSourceDao
 import com.zy.player.data.local.dao.VideoSiteDao
 import com.zy.player.data.local.entity.HistoryEntity
 import com.zy.player.data.local.entity.LiveSourceEntity
+import com.zy.player.data.local.entity.PodcastSubscriptionEntity
+import com.zy.player.data.local.entity.RadioSourceEntity
 import com.zy.player.data.local.entity.VideoSiteEntity
 
 @Database(
     entities = [
         VideoSiteEntity::class,
         HistoryEntity::class,
-        LiveSourceEntity::class
+        LiveSourceEntity::class,
+        RadioSourceEntity::class,
+        PodcastSubscriptionEntity::class
     ],
-    version = 6,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun videoSiteDao(): VideoSiteDao
     abstract fun historyDao(): HistoryDao
     abstract fun liveSourceDao(): LiveSourceDao
+    abstract fun radioSourceDao(): RadioSourceDao
+    abstract fun podcastSubscriptionDao(): PodcastSubscriptionDao
 
     class Callback : RoomDatabase.Callback() {
         override fun onCreate(db: SupportSQLiteDatabase) {
@@ -43,6 +51,13 @@ abstract class AppDatabase : RoomDatabase() {
                 VALUES
                 ('IPTV直播源', '${DefaultSources.DEFAULT_LIVE_SOURCE_URL}', 1, 1, '未检测', 0),
                 ('播放测试源', '${DefaultSources.PLAYBACK_TEST_LIVE_SOURCE_URL}', 1, 2, '可播放', 0)
+            """)
+
+            db.execSQL("""
+                INSERT INTO radio_sources (name, url, enabled, sortOrder, lastCheckStatus, lastCheckTime)
+                VALUES
+                ('热门网络电台', '${DefaultSources.DEFAULT_RADIO_SOURCE_URL}', 1, 1, '未检测', 0),
+                ('中文网络电台', '${DefaultSources.RADIO_BROWSER_CHINA_SOURCE_URL}', 1, 2, '未检测', 0)
             """)
         }
     }
@@ -120,6 +135,60 @@ abstract class AppDatabase : RoomDatabase() {
                         ORDER BY sortOrder ASC, id ASC
                         LIMIT 1
                     )
+                """)
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS radio_sources (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        url TEXT NOT NULL,
+                        enabled INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL,
+                        lastCheckStatus TEXT NOT NULL,
+                        lastCheckTime INTEGER NOT NULL
+                    )
+                """)
+                db.execSQL("""
+                    INSERT INTO radio_sources (name, url, enabled, sortOrder, lastCheckStatus, lastCheckTime)
+                    SELECT '热门网络电台', '${DefaultSources.DEFAULT_RADIO_SOURCE_URL}', 1, 1, '未检测', 0
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM radio_sources
+                        WHERE url = '${DefaultSources.DEFAULT_RADIO_SOURCE_URL}'
+                    )
+                """)
+                db.execSQL("""
+                    INSERT INTO radio_sources (name, url, enabled, sortOrder, lastCheckStatus, lastCheckTime)
+                    SELECT '中文网络电台', '${DefaultSources.RADIO_BROWSER_CHINA_SOURCE_URL}', 1, 2, '未检测', 0
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM radio_sources
+                        WHERE url = '${DefaultSources.RADIO_BROWSER_CHINA_SOURCE_URL}'
+                    )
+                """)
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS podcast_subscriptions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        url TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        imageUrl TEXT NOT NULL,
+                        link TEXT NOT NULL,
+                        episodeCount INTEGER NOT NULL,
+                        lastRefreshTime INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL
+                    )
+                """)
+                db.execSQL("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_podcast_subscriptions_url
+                    ON podcast_subscriptions(url)
                 """)
             }
         }

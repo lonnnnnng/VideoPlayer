@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zy.player.domain.model.LiveChannel
 import com.zy.player.ui.components.CinemaBackground
+import com.zy.player.ui.components.PageHeader
 import com.zy.player.ui.theme.AppColors
 
 private enum class OnlineLinkMode {
@@ -54,6 +55,7 @@ private enum class OnlineLinkMode {
 
 @Composable
 fun OnlineScreen(
+    onNavigateBack: () -> Unit,
     onNavigateToM3u8Player: (String) -> Unit,
     onNavigateToLivePlayer: (LiveChannel) -> Unit,
     viewModel: OnlineViewModel = hiltViewModel()
@@ -65,53 +67,60 @@ fun OnlineScreen(
     val mode = remember(inputUrl) { inferOnlineLinkMode(inputUrl) }
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding(),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                top = 10.dp,
-                end = 16.dp,
-                bottom = 96.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            item {
-                OnlineIntroCopy()
-            }
+        Column(modifier = Modifier.fillMaxSize()) {
+            PageHeader(
+                title = "在线播放",
+                onBackClick = onNavigateBack
+            )
 
-            item {
-                OnlineInputField(
-                    inputUrl = inputUrl,
-                    onInputChange = {
-                        inputUrl = it
-                        viewModel.clearParseResult()
-                    }
-                )
-            }
-
-            item {
-                OnlineActionButton(
-                    enabled = validation.isPlayable,
-                    isLoading = parseUiState.isLoading,
-                    onActionClick = {
-                        focusManager.clearFocus(force = true)
-                        val playableUrl = inputUrl.trim()
-                        when (mode) {
-                            OnlineLinkMode.M3u8 -> onNavigateToM3u8Player(playableUrl)
-                            OnlineLinkMode.M3u -> viewModel.parseM3u(playableUrl)
-                        }
-                    }
-                )
-            }
-
-            if (parseUiState.message != null || parseUiState.channels.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding(),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    top = 0.dp,
+                    end = 16.dp,
+                    bottom = 96.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 item {
-                    OnlineParseResultPanel(
-                        state = parseUiState,
-                        onChannelClick = onNavigateToLivePlayer
+                    OnlineIntroCopy()
+                }
+
+                item {
+                    OnlineInputField(
+                        inputUrl = inputUrl,
+                        onInputChange = {
+                            inputUrl = it
+                            viewModel.clearParseResult()
+                        }
                     )
+                }
+
+                item {
+                    OnlineActionButton(
+                        enabled = validation.isPlayable,
+                        isLoading = parseUiState.isLoading,
+                        onActionClick = {
+                            focusManager.clearFocus(force = true)
+                            val playableUrl = inputUrl.trim()
+                            when (mode) {
+                                OnlineLinkMode.M3u8 -> onNavigateToM3u8Player(playableUrl)
+                                OnlineLinkMode.M3u -> viewModel.parseM3u(playableUrl)
+                            }
+                        }
+                    )
+                }
+
+                if (parseUiState.message != null || parseUiState.channels.isNotEmpty()) {
+                    item {
+                        OnlineParseResultPanel(
+                            state = parseUiState,
+                            onChannelClick = onNavigateToLivePlayer
+                        )
+                    }
                 }
             }
         }
