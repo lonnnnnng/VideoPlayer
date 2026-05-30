@@ -42,10 +42,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zy.player.ui.components.CinemaBackground
-import com.zy.player.ui.components.CinemaLoading
 import com.zy.player.ui.components.CinemaMessage
 import com.zy.player.ui.components.CinemaSearchPill
 import com.zy.player.ui.components.NetworkImage
+import com.zy.player.ui.components.ShimmerEffect
 import com.zy.player.ui.theme.AppColors
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -99,7 +99,7 @@ fun HomeScreen(
 
                 when (val state = uiState) {
                     is HomeUiState.Loading -> {
-                        item { CinemaLoading() }
+                        homeSkeletonGrid()
                     }
                     is HomeUiState.Error -> {
                         item {
@@ -120,60 +120,81 @@ fun HomeScreen(
                         }
                     }
                     is HomeUiState.Success -> {
-                        state.warningMessage?.let { warning ->
-                            item {
-                                Text(
-                                    text = warning,
-                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp),
-                                    color = AppColors.TextTertiary,
-                                    fontSize = 12.sp,
-                                    lineHeight = 16.sp
-                                )
-                            }
-                        }
-
-                        items(
-                            items = state.vodList.chunked(3),
-                            key = { row -> row.joinToString(separator = "-") { it.key } }
-                        ) { row ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                row.forEach { item ->
-                                    CinemaVodPoster(
-                                        item = item,
-                                        onClick = {
-                                            onNavigateToDetail(item.siteId, item.vod.vod_id.toString())
-                                        },
-                                        modifier = Modifier.weight(1f)
+                        if (state.isRefreshing) {
+                            homeSkeletonGrid()
+                        } else {
+                            state.warningMessage?.let { warning ->
+                                item {
+                                    Text(
+                                        text = warning,
+                                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp),
+                                        color = AppColors.TextTertiary,
+                                        fontSize = 12.sp,
+                                        lineHeight = 16.sp
                                     )
                                 }
-                                repeat(3 - row.size) {
-                                    Spacer(modifier = Modifier.weight(1f))
+                            }
+
+                            items(
+                                items = state.vodList.chunked(3),
+                                key = { row -> row.joinToString(separator = "-") { it.key } }
+                            ) { row ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    row.forEach { item ->
+                                        CinemaVodPoster(
+                                            item = item,
+                                            onClick = {
+                                                onNavigateToDetail(item.siteId, item.vod.vod_id.toString())
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    repeat(3 - row.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
                                 }
                             }
-                        }
 
-                        if (state.isLoadingMore) {
-                            item {
-                                HomeLoadMoreFooter(
-                                    text = "正在加载更多",
-                                    showProgress = true
-                                )
-                            }
-                        } else if (!state.hasMore && state.vodList.isNotEmpty()) {
-                            item {
-                                HomeLoadMoreFooter(
-                                    text = "已经到底了",
-                                    showProgress = false
-                                )
+                            if (state.isLoadingMore) {
+                                item {
+                                    HomeLoadMoreFooter(
+                                        text = "正在加载更多",
+                                        showProgress = true
+                                    )
+                                }
+                            } else if (!state.hasMore && state.vodList.isNotEmpty()) {
+                                item {
+                                    HomeLoadMoreFooter(
+                                        text = "已经到底了",
+                                        showProgress = false
+                                    )
+                                }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.homeSkeletonGrid(
+    rowCount: Int = 4
+) {
+    items(rowCount, key = { "home-skeleton-row-$it" }) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            repeat(3) {
+                HomeVodPosterSkeleton(modifier = Modifier.weight(1f))
             }
         }
     }
@@ -223,6 +244,34 @@ private fun HomeStickyHeader(
             text = "搜索片名、演员、年份",
             horizontalPadding = 0.dp,
             onClick = onSearchClick
+        )
+    }
+}
+
+@Composable
+private fun HomeVodPosterSkeleton(
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        ShimmerEffect(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(4.dp))
+        )
+        ShimmerEffect(
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .fillMaxWidth(0.82f)
+                .height(14.dp)
+                .clip(RoundedCornerShape(3.dp))
+        )
+        ShimmerEffect(
+            modifier = Modifier
+                .padding(top = 5.dp)
+                .fillMaxWidth(0.64f)
+                .height(12.dp)
+                .clip(RoundedCornerShape(3.dp))
         )
     }
 }
