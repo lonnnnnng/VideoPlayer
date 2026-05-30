@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,6 +22,21 @@ class LiveRepository @Inject constructor(
     private val okHttpClient: OkHttpClient,
     private val networkSettingsRepository: NetworkSettingsRepository
 ) {
+    companion object {
+        private const val MAX_PARSED_CHANNELS = 5_000
+        private const val CHANNEL_CACHE_TTL_MS = 10 * 60 * 1_000L
+        private val TVG_NAME_REGEX = """tvg-name="([^"]+)"""".toRegex()
+        private val TVG_LOGO_REGEX = """tvg-logo="([^"]+)"""".toRegex()
+        private val GROUP_TITLE_REGEX = """group-title="([^"]+)"""".toRegex()
+    }
+
+    private data class CachedChannels(
+        val channels: List<LiveChannel>,
+        val timestampMs: Long
+    )
+
+    private val channelCache = ConcurrentHashMap<String, CachedChannels>()
+
     fun observeAllSources(): Flow<List<LiveSourceEntity>> = liveSourceDao.observeAll()
 
     suspend fun getEnabledSources(): List<LiveSourceEntity> = liveSourceDao.getEnabled()
@@ -60,22 +76,33 @@ class LiveRepository @Inject constructor(
 
     suspend fun fetchAndParseChannels(
         url: String,
-        timeoutMs: Long = networkSettingsRepository.currentSettings().liveSourceTimeoutMs
+        timeoutMs: Long = networkSettingsRepository.currentSettings().liveSourceTimeoutMs,
+        forceRefresh: Boolean = false
     ): Result<List<LiveChannel>> = withContext(Dispatchers.IO) {
         try {
+            val now = System.currentTimeMillis()
+            if (!forceRefresh) {
+                channelCache[url]
+                    ?.takeIf { now - it.timestampMs <= CHANNEL_CACHE_TTL_MS }
+                    ?.let { return@withContext Result.success(it.channels) }
+            }
+
             withTimeout(timeoutMs.milliseconds) {
                 val request = Request.Builder().url(url).build()
                 val response = okHttpClient.newCall(request).apply {
                     timeout().timeout(timeoutMs, TimeUnit.MILLISECONDS)
                 }.execute()
 
-                if (!response.isSuccessful) {
-                    return@withTimeout Result.failure(Exception("HTTP ${response.code}"))
-                }
+                response.use {
+                    if (!it.isSuccessful) {
+                        return@withTimeout Result.failure(Exception("HTTP ${it.code}"))
+                    }
 
-                val content = response.body?.string() ?: ""
-                val channels = parseM3U(content, url)
-                Result.success(channels)
+                    val content = it.body?.string() ?: ""
+                    val channels = parseM3U(content, url)
+                    channelCache[url] = CachedChannels(channels, System.currentTimeMillis())
+                    Result.success(channels)
+                }
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -116,6 +143,7 @@ class LiveRepository @Inject constructor(
                             SourceDataException("接口返回内容无法解析出频道", rawContent = content)
                         )
                     }
+                    channelCache[url] = CachedChannels(channels, System.currentTimeMillis())
 
                     Result.success(
                         LiveSourceCheckResponse(
@@ -134,19 +162,18 @@ class LiveRepository @Inject constructor(
 
     private fun parseM3U(content: String, sourceUrl: String): List<LiveChannel> {
         val channels = mutableListOf<LiveChannel>()
-        val lines = content.lines()
         var currentGroup = "默认"
         var currentName: String? = null
         var currentLogo = ""
 
-        for (line in lines) {
+        for (line in content.lineSequence()) {
+            if (channels.size >= MAX_PARSED_CHANNELS) break
             val trimmed = line.trim()
             when {
                 trimmed.startsWith("#EXTINF:") -> {
-                    // Parse #EXTINF:-1 tvg-name="CCTV1" tvg-logo="..." group-title="央视",CCTV1综合
-                    val nameMatch = """tvg-name="([^"]+)"""".toRegex().find(trimmed)
-                    val logoMatch = """tvg-logo="([^"]+)"""".toRegex().find(trimmed)
-                    val groupMatch = """group-title="([^"]+)"""".toRegex().find(trimmed)
+                    val nameMatch = TVG_NAME_REGEX.find(trimmed)
+                    val logoMatch = TVG_LOGO_REGEX.find(trimmed)
+                    val groupMatch = GROUP_TITLE_REGEX.find(trimmed)
                     val labelMatch = trimmed.substringAfterLast(",", "")
 
                     currentName = nameMatch?.groupValues?.get(1) ?: labelMatch.ifBlank { null }

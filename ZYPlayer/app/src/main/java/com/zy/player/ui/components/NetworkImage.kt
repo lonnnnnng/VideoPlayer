@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -17,7 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.zy.player.ui.theme.AppColors
 
@@ -28,51 +31,78 @@ fun NetworkImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop
 ) {
+    val context = LocalContext.current
+    var fallbackMode by remember(url) { mutableStateOf(ImageFallbackMode.Loading) }
+    val imageRequest = remember(context, url) {
+        ImageRequest.Builder(context)
+            .data(url)
+            .crossfade(false)
+            .build()
+    }
+
     Box(modifier = modifier) {
         if (url.isBlank()) {
-            ImageFallback(title = contentDescription)
+            ImageFallback(title = contentDescription, mode = ImageFallbackMode.Error)
         } else {
-            SubcomposeAsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(url)
-                    .crossfade(true)
-                    .build(),
+            if (fallbackMode != ImageFallbackMode.Hidden) {
+                ImageFallback(title = contentDescription, mode = fallbackMode)
+            }
+            AsyncImage(
+                model = imageRequest,
                 contentDescription = contentDescription,
                 contentScale = contentScale,
-                loading = { ImageFallback(title = contentDescription) },
-                error = { ImageFallback(title = contentDescription) },
+                onLoading = { fallbackMode = ImageFallbackMode.Loading },
+                onSuccess = { fallbackMode = ImageFallbackMode.Hidden },
+                onError = { fallbackMode = ImageFallbackMode.Error },
                 modifier = Modifier.fillMaxSize()
             )
         }
     }
 }
 
+private enum class ImageFallbackMode {
+    Loading,
+    Error,
+    Hidden
+}
+
 @Composable
-private fun ImageFallback(title: String?) {
+private fun ImageFallback(
+    title: String?,
+    mode: ImageFallbackMode
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        AppColors.SurfaceAlt,
-                        AppColors.SurfaceRaised,
-                        AppColors.Primary.copy(alpha = 0.10f)
+            .then(
+                if (mode == ImageFallbackMode.Loading) {
+                    Modifier.background(AppColors.SurfaceAlt)
+                } else {
+                    Modifier.background(
+                        Brush.linearGradient(
+                            listOf(
+                                AppColors.SurfaceAlt,
+                                AppColors.SurfaceRaised,
+                                AppColors.Primary.copy(alpha = 0.10f)
+                            )
+                        )
                     )
-                )
+                }
             )
             .padding(12.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = title?.takeIf { it.isNotBlank() } ?: "ZYPlayer",
-            color = AppColors.TextPrimary.copy(alpha = 0.78f),
-            fontSize = 13.sp,
-            lineHeight = 17.sp,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-            maxLines = 4,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (mode == ImageFallbackMode.Error) {
+            Text(
+                text = title?.takeIf { it.isNotBlank() } ?: "ZYPlayer",
+                color = AppColors.TextPrimary.copy(alpha = 0.78f),
+                fontSize = 13.sp,
+                lineHeight = 17.sp,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }

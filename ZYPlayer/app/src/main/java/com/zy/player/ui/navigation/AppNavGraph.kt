@@ -71,6 +71,7 @@ fun AppNavGraph(
     val currentDestination = navBackStackEntry?.destination
     val currentRoute = currentDestination?.route
     val topLevelRoutes = bottomNavItems.map { it.route }
+    val playerRoutes = listOf(Destinations.EPISODE_PLAYER, Destinations.LIVE_PLAYER)
     val context = LocalContext.current
     val activity = context as? Activity
     var showExitDialog by remember { mutableStateOf(false) }
@@ -320,7 +321,7 @@ fun AppNavGraph(
             }
         }
 
-        BackHandler {
+        BackHandler(enabled = currentRoute !in playerRoutes) {
             if (currentRoute in topLevelRoutes) {
                 showExitDialog = true
             } else {

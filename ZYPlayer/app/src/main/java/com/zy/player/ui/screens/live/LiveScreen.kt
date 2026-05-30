@@ -35,6 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -119,7 +121,11 @@ fun LiveScreen(
                                 )
                             }
                             is LiveUiState.Success -> {
-                                items(state.channels) { channel ->
+                                items(
+                                    items = state.channels,
+                                    key = { channel -> "${channel.name}|${channel.group}|${channel.url}" },
+                                    contentType = { "live-channel-row" }
+                                ) { channel ->
                                     ChannelRow(
                                         channel = channel,
                                         onClick = { onNavigateToPlayer(channel, currentSourceId) }
@@ -254,7 +260,11 @@ private fun SourceTabs(
                     onClick = onAllClick
                 )
             }
-            items(labels.take(10)) { label ->
+            items(
+                items = labels.take(10),
+                key = { label -> label },
+                contentType = { "live-group-chip" }
+            ) { label ->
                 SourceTabChip(
                     label = label,
                     active = label == selected,
@@ -313,20 +323,30 @@ private fun ChannelRow(
             modifier = Modifier
                 .size(34.dp)
                 .clip(RoundedCornerShape(4.dp))
-                .background(AppColors.PrimaryLight),
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            Color(0xFF1E293B),
+                            Color(0xFF334155)
+                        )
+                    )
+                )
+                .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(4.dp)),
             contentAlignment = Alignment.Center
         ) {
             if (channel.logo.isNotBlank()) {
                 NetworkImage(
                     url = channel.logo,
                     contentDescription = "${channel.name}台标",
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(5.dp),
                     contentScale = ContentScale.Fit
                 )
             } else {
                 Text(
                     text = channel.name.filter { it.isDigit() }.take(2).ifBlank { channel.name.take(1) },
-                    color = AppColors.Primary,
+                    color = Color.White,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Black
                 )

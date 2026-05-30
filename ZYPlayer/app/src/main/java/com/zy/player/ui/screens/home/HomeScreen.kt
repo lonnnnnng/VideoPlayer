@@ -58,6 +58,9 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     val successState = uiState as? HomeUiState.Success
+    val successRows = remember(successState?.vodList) {
+        successState?.vodList?.chunked(3).orEmpty()
+    }
     val shouldLoadMore by remember(uiState) {
         derivedStateOf {
             val state = uiState as? HomeUiState.Success ?: return@derivedStateOf false
@@ -123,6 +126,7 @@ fun HomeScreen(
                         if (state.isRefreshing) {
                             homeSkeletonGrid()
                         } else {
+                            val rows = successRows
                             state.warningMessage?.let { warning ->
                                 item {
                                     Text(
@@ -136,8 +140,9 @@ fun HomeScreen(
                             }
 
                             items(
-                                items = state.vodList.chunked(3),
-                                key = { row -> row.joinToString(separator = "-") { it.key } }
+                                items = rows,
+                                key = { row -> row.joinToString(separator = "-") { it.key } },
+                                contentType = { "home-vod-row" }
                             ) { row ->
                                 Row(
                                     modifier = Modifier

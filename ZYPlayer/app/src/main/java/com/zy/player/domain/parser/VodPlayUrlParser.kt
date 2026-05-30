@@ -23,6 +23,7 @@ object VodPlayUrlParser {
 
         groupUrls.forEachIndexed { groupIndex, groupRaw ->
             val groupName = groupNames.getOrNull(groupIndex) ?: "group_$groupIndex"
+            var skippedNonM3u8Count = 0
             val episodes = groupRaw.split('#').mapIndexedNotNull { idx, entry ->
                 val raw = entry.trim()
                 if (raw.isBlank()) return@mapIndexedNotNull null
@@ -37,10 +38,15 @@ object VodPlayUrlParser {
                     url = raw.substring(splitIndex + 1).trim()
                 }
                 if (url.isBlank()) return@mapIndexedNotNull null
+                val normalizedUrl = normalizeUrl(url)
+                if (!isM3u8EpisodeUrl(normalizedUrl)) {
+                    skippedNonM3u8Count++
+                    return@mapIndexedNotNull null
+                }
                 EpisodeItem(
                     groupName = groupName,
                     label = label,
-                    url = normalizeUrl(url)
+                    url = normalizedUrl
                 )
             }
             if (episodes.isNotEmpty()) {
@@ -49,6 +55,8 @@ object VodPlayUrlParser {
                     Log.d(TAG, "parse - Episode: ${ep.label} -> ${ep.url}")
                 }
                 groupedEpisodes += EpisodeGroup(groupName, episodes)
+            } else if (skippedNonM3u8Count > 0) {
+                Log.d(TAG, "parse - Group $groupIndex ($groupName): skipped $skippedNonM3u8Count non-m3u8 entries")
             }
         }
 
@@ -60,10 +68,6 @@ object VodPlayUrlParser {
         val preferredIndex = groupedEpisodes.indexOfFirst { group ->
             val name = group.name
             name.contains("m3u8", ignoreCase = true) || name.contains("hls", ignoreCase = true)
-        }.takeIf { it >= 0 } ?: groupedEpisodes.indexOfFirst { group ->
-            group.episodes.any { it.url.contains(".m3u8", ignoreCase = true) }
-        }.takeIf { it >= 0 } ?: groupedEpisodes.indexOfFirst { group ->
-            group.episodes.any { isLikelyPlayable(it.url) }
         }.takeIf { it >= 0 } ?: 0
 
         val preferred = groupedEpisodes[preferredIndex]
@@ -98,8 +102,9 @@ object VodPlayUrlParser {
         }
     }
 
-    private fun isLikelyPlayable(url: String?): Boolean {
-        val raw = url.orEmpty().lowercase()
-        return raw.startsWith("http://") || raw.startsWith("https://")
+    private fun isM3u8EpisodeUrl(url: String): Boolean {
+        val raw = url.lowercase()
+        return (raw.startsWith("http://") || raw.startsWith("https://")) &&
+            raw.contains(".m3u8")
     }
 }

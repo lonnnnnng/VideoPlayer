@@ -175,7 +175,11 @@ fun SiteManagementScreen(
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    itemsIndexed(sites) { index, site ->
+                    itemsIndexed(
+                        items = sites,
+                        key = { _, site -> site.id },
+                        contentType = { _, _ -> "video-site-row" }
+                    ) { index, site ->
                         SiteItem(
                             site = site,
                             canMoveUp = index > 0,

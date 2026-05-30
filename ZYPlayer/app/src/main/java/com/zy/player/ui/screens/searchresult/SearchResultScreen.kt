@@ -90,7 +90,11 @@ fun SearchResultScreen(
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(state.vodList) { item ->
+                            items(
+                                items = state.vodList,
+                                key = { item -> "${item.siteId}:${item.vod.vod_id}" },
+                                contentType = { "search-result-row" }
+                            ) { item ->
                                 SearchResultRow(
                                     vod = item.vod,
                                     siteName = item.siteName,

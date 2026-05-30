@@ -5,8 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.zy.player.data.repository.LiveRepository
 import com.zy.player.domain.model.LiveChannel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 sealed class LiveUiState {
@@ -34,6 +38,9 @@ class LiveViewModel @Inject constructor(
     val selectedGroup: StateFlow<String?> = _selectedGroup.asStateFlow()
 
     private var allChannels = emptyList<LiveChannel>()
+    private var allGroups = emptyList<String>()
+    private var loadChannelsJob: Job? = null
+    private var filterJob: Job? = null
 
     val sources = liveRepository.observeAllSources()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -60,12 +67,14 @@ class LiveViewModel @Inject constructor(
     }
 
     private fun loadChannels(url: String) {
-        viewModelScope.launch {
+        loadChannelsJob?.cancel()
+        loadChannelsJob = viewModelScope.launch {
             _uiState.value = LiveUiState.Loading
             liveRepository.fetchAndParseChannels(url).fold(
                 onSuccess = { channels ->
                     allChannels = channels
-                    applyFilters()
+                    allGroups = channels.map { it.group }.distinct().sorted()
+                    scheduleApplyFilters()
                 },
                 onFailure = { error ->
                     _uiState.value = LiveUiState.Error(error.message ?: "加载失败")
@@ -75,40 +84,51 @@ class LiveViewModel @Inject constructor(
     }
 
     fun setSearchQuery(query: String) {
+        if (_searchQuery.value == query) return
         _searchQuery.value = query
-        applyFilters()
+        scheduleApplyFilters(debounceMs = 180L)
     }
 
     fun showAllChannels() {
         if (_searchQuery.value.isBlank() && _selectedGroup.value == null) return
         _searchQuery.value = ""
         _selectedGroup.value = null
-        applyFilters()
+        scheduleApplyFilters()
     }
 
     fun selectGroup(group: String?) {
+        if (_selectedGroup.value == group) return
         _selectedGroup.value = group
-        applyFilters()
+        scheduleApplyFilters()
     }
 
-    private fun applyFilters() {
-        val query = _searchQuery.value
-        val group = _selectedGroup.value
+    private fun scheduleApplyFilters(debounceMs: Long = 0L) {
+        filterJob?.cancel()
+        filterJob = viewModelScope.launch {
+            if (debounceMs > 0L) {
+                delay(debounceMs)
+            }
+            val query = _searchQuery.value
+            val group = _selectedGroup.value
+            val channels = allChannels
 
-        val filtered = allChannels.filter { channel ->
-            val matchesQuery = query.isBlank() || channel.name.contains(query, ignoreCase = true)
-            val matchesGroup = group == null || channel.group == group
-            matchesQuery && matchesGroup
-        }
+            val filtered = withContext(Dispatchers.Default) {
+                channels.filter { channel ->
+                    val matchesQuery = query.isBlank() || channel.name.contains(query, ignoreCase = true)
+                    val matchesGroup = group == null || channel.group == group
+                    matchesQuery && matchesGroup
+                }
+            }
 
-        _uiState.value = if (filtered.isEmpty()) {
-            LiveUiState.Empty
-        } else {
-            LiveUiState.Success(filtered)
+            _uiState.value = if (filtered.isEmpty()) {
+                LiveUiState.Empty
+            } else {
+                LiveUiState.Success(filtered)
+            }
         }
     }
 
     fun getGroups(): List<String> {
-        return allChannels.map { it.group }.distinct().sorted()
+        return allGroups
     }
 }

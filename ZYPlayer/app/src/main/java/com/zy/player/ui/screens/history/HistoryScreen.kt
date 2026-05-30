@@ -85,7 +85,11 @@ fun HistoryScreen(
                     contentPadding = PaddingValues(Dimens.paddingMedium),
                     verticalArrangement = Arrangement.spacedBy(Dimens.paddingMedium)
                 ) {
-                    items(historyList) { history ->
+                    items(
+                        items = historyList,
+                        key = { history -> history.key },
+                        contentType = { "history-row" }
+                    ) { history ->
                         HistoryItem(
                             history = history,
                             onClick = {

@@ -8,25 +8,35 @@ import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.net.Uri
 import android.provider.Settings
+import android.view.LayoutInflater
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
@@ -40,6 +50,8 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
@@ -54,15 +66,18 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -79,6 +94,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.zy.player.R
 import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.theme.AppColors
 import kotlin.math.abs
@@ -111,35 +127,52 @@ fun EpisodePlayerScreen(
     val activity = context as? Activity
 
     val isPlaying by viewModel.isPlaying.collectAsState()
-    val currentPosition by viewModel.currentPosition.collectAsState()
-    val duration by viewModel.duration.collectAsState()
+    val currentPositionState = viewModel.currentPosition.collectAsState()
+    val durationState = viewModel.duration.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
-    val activeEpisodeUrl by viewModel.activeEpisodeUrl.collectAsState()
+    val activeEpisodeUrlState = viewModel.activeEpisodeUrl.collectAsState()
+    val activeEpisodeLabel by viewModel.activeEpisodeLabel.collectAsState()
     val playbackUiState by viewModel.playbackUiState.collectAsState()
     val sourceOptions by viewModel.sourceOptions.collectAsState()
-    val playbackStats by viewModel.playbackStats.collectAsState()
+    val episodeNavigation by viewModel.episodeNavigation.collectAsState()
+    val playbackStatsState = viewModel.playbackStats.collectAsState()
+    val saveEpisodeLabel = activeEpisodeLabel.ifBlank { episodeLabel }
+    val saveEpisodeLabelState = rememberUpdatedState(saveEpisodeLabel)
 
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showSourceDialog by remember { mutableStateOf(false) }
     var showCastDialog by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(false) }
     var isFullscreen by remember { mutableStateOf(false) }
+    var isLeaving by remember { mutableStateOf(false) }
     var brightnessOverlay by remember { mutableStateOf<Float?>(null) }
     var volumeOverlay by remember { mutableStateOf<Int?>(null) }
 
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
     val seekBackward = {
-        viewModel.seekTo(quickSeekPosition(currentPosition, duration, -QUICK_SEEK_MS))
+        viewModel.seekTo(quickSeekPosition(currentPositionState.value, durationState.value, -QUICK_SEEK_MS))
     }
     val seekForward = {
-        viewModel.seekTo(quickSeekPosition(currentPosition, duration, QUICK_SEEK_MS))
+        viewModel.seekTo(quickSeekPosition(currentPositionState.value, durationState.value, QUICK_SEEK_MS))
+    }
+    val leavePlayer = {
+        if (!isLeaving) {
+            isLeaving = true
+            viewModel.savePlaybackPosition(title, "", saveEpisodeLabel)
+            viewModel.stopPlayback()
+            if (isFullscreen) {
+                exitFullscreen(activity)
+            }
+        }
     }
 
     DisposableEffect(Unit) {
         onDispose {
-            viewModel.savePlaybackPosition(title, "", episodeLabel)
-            viewModel.stopPlayback()
+            if (!isLeaving) {
+                viewModel.savePlaybackPosition(title, "", saveEpisodeLabelState.value)
+                viewModel.stopPlayback()
+            }
             if (isFullscreen) {
                 exitFullscreen(activity)
             }
@@ -161,20 +194,37 @@ fun EpisodePlayerScreen(
         }
     }
 
+    LaunchedEffect(isLeaving) {
+        if (isLeaving) {
+            withFrameNanos { }
+            onNavigateBack()
+        }
+    }
+
+    BackHandler {
+        if (isFullscreen) {
+            isFullscreen = false
+        } else {
+            leavePlayer()
+        }
+    }
+
+    if (isLeaving) {
+        CinemaBackground(modifier = Modifier.fillMaxSize()) {}
+        return
+    }
+
     val playerViewFactory: @Composable () -> Unit = {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    setShutterBackgroundColor(android.graphics.Color.BLACK)
-                }
+                createTexturePlayerView(ctx)
             },
             onRelease = { playerView ->
                 playerView.player = null
+                playerView.onPause()
             },
             update = { playerView ->
-                playerView.player = viewModel.getPlayer()
+                playerView.player = if (isLeaving) null else viewModel.getPlayer()
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -185,16 +235,16 @@ fun EpisodePlayerScreen(
             Column(modifier = Modifier.fillMaxSize()) {
                 if (!isFullscreen) {
                     PlayerEpisodeTopBar(
-                        title = episodeTopBarTitle(title, episodeLabel),
-                        onNavigateBack = onNavigateBack
+                        title = episodeTopBarTitle(title, saveEpisodeLabel),
+                        onNavigateBack = leavePlayer
                     )
 
                     PlayerSurface(
                         isFullscreen = false,
                         showControls = showControls,
                         isPlaying = isPlaying,
-                        currentPosition = currentPosition,
-                        duration = duration,
+                        currentPositionState = currentPositionState,
+                        durationState = durationState,
                         playbackUiState = playbackUiState,
                         brightnessOverlay = brightnessOverlay,
                         volumeOverlay = volumeOverlay,
@@ -229,54 +279,48 @@ fun EpisodePlayerScreen(
                         .padding(horizontal = 18.dp, vertical = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = episodePlayerSubtitle(
-                            episodeUrl = activeEpisodeUrl,
-                            currentPosition = currentPosition,
-                            duration = duration,
-                            playbackUiState = playbackUiState
-                        ),
-                        color = AppColors.TextSecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 20.sp
-                    )
-
-                    LinearProgressIndicator(
-                        progress = {
-                            if (duration > 0) currentPosition.toFloat() / duration else 0f
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(5.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = AppColors.Primary,
-                        trackColor = AppColors.SurfaceRaised
-                    )
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PlayerMetaPill(formatTime(currentPosition))
-                        PlayerMetaPill(playerSourceLabel(activeEpisodeUrl))
-                        PlayerMetaPill(
-                            if (duration > 0L) {
-                                "${((currentPosition * 100f) / duration).toInt()}%"
-                            } else {
-                                "准备中"
-                            }
-                        )
-                    }
-
-                    PlaybackStatsRow(stats = playbackStats)
-
-                    PlayerSourceLinkRow(
-                        url = activeEpisodeUrl,
-                        onCopyClick = {
+                    EpisodePlaybackInfo(
+                        episodeUrlState = activeEpisodeUrlState,
+                        currentPositionState = currentPositionState,
+                        durationState = durationState,
+                        playbackUiState = playbackUiState,
+                        playbackStatsState = playbackStatsState,
+                        onCopyClick = { url ->
                             copyPlayerSourceLink(
                                 context = context,
                                 clipboardManager = clipboardManager,
-                                url = activeEpisodeUrl
+                                url = url
                             )
                         }
                     )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        PlayerUtilityButton(
+                            icon = Icons.Default.SkipPrevious,
+                            label = "上一集",
+                            onClick = viewModel::playPreviousEpisode,
+                            enabled = episodeNavigation.hasPrevious,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+
+                        PlayerUtilityButton(
+                            icon = Icons.Default.SkipNext,
+                            label = "下一集",
+                            onClick = viewModel::playNextEpisode,
+                            enabled = episodeNavigation.hasNext,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -411,8 +455,8 @@ fun EpisodePlayerScreen(
                     isFullscreen = true,
                     showControls = showControls,
                     isPlaying = isPlaying,
-                    currentPosition = currentPosition,
-                    duration = duration,
+                    currentPositionState = currentPositionState,
+                    durationState = durationState,
                     playbackUiState = playbackUiState,
                     brightnessOverlay = brightnessOverlay,
                     volumeOverlay = volumeOverlay,
@@ -519,65 +563,14 @@ fun EpisodePlayerScreen(
     }
 
     if (showSourceDialog) {
-        AlertDialog(
-            onDismissRequest = { showSourceDialog = false },
-            containerColor = AppColors.Surface,
-            titleContentColor = AppColors.TextPrimary,
-            textContentColor = AppColors.TextSecondary,
-            title = { Text("播放换源") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (sourceOptions.isEmpty()) {
-                        Text("正在查找同集可用线路...")
-                    } else {
-                        sourceOptions.forEach { option ->
-                            TextButton(
-                                onClick = {
-                                    viewModel.switchToSource(option.key)
-                                    showSourceDialog = false
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
-                                        Text(
-                                            text = option.sourceName,
-                                            color = if (option.isCurrent) AppColors.Primary else AppColors.TextPrimary,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Black
-                                        )
-                                        Text(
-                                            text = option.episodeLabel.ifBlank { episodeLabel.ifBlank { "当前集" } },
-                                            color = AppColors.TextTertiary,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                    if (option.isCurrent) {
-                                        Text(
-                                            text = "当前",
-                                            color = AppColors.Primary,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        EpisodeSourceDialog(
+            sourceOptions = sourceOptions,
+            currentEpisodeLabel = saveEpisodeLabel,
+            onSelect = { key ->
+                viewModel.switchToSource(key)
+                showSourceDialog = false
             },
-            confirmButton = {
-                TextButton(onClick = { showSourceDialog = false }) {
-                    Text("关闭")
-                }
-            }
+            onDismiss = { showSourceDialog = false }
         )
     }
 
@@ -602,17 +595,18 @@ fun LivePlayerScreen(
     val activity = context as? Activity
 
     val isPlaying by viewModel.isPlaying.collectAsState()
-    val currentPosition by viewModel.currentPosition.collectAsState()
-    val duration by viewModel.duration.collectAsState()
-    val activeLiveUrl by viewModel.activeLiveUrl.collectAsState()
+    val currentPositionState = viewModel.currentPosition.collectAsState()
+    val durationState = viewModel.duration.collectAsState()
+    val activeLiveUrlState = viewModel.activeLiveUrl.collectAsState()
     val playbackUiState by viewModel.playbackUiState.collectAsState()
-    val playbackStats by viewModel.playbackStats.collectAsState()
+    val playbackStatsState = viewModel.playbackStats.collectAsState()
     val lineOptions by viewModel.lineOptions.collectAsState()
 
     var showCastDialog by remember { mutableStateOf(false) }
     var showLineDialog by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(false) }
     var isFullscreen by remember { mutableStateOf(false) }
+    var isLeaving by remember { mutableStateOf(false) }
     var brightnessOverlay by remember { mutableStateOf<Float?>(null) }
     var volumeOverlay by remember { mutableStateOf<Int?>(null) }
 
@@ -624,10 +618,21 @@ fun LivePlayerScreen(
     } else {
         "线路"
     }
+    val leavePlayer = {
+        if (!isLeaving) {
+            isLeaving = true
+            viewModel.stopPlayback()
+            if (isFullscreen) {
+                exitFullscreen(activity)
+            }
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose {
-            viewModel.stopPlayback()
+            if (!isLeaving) {
+                viewModel.stopPlayback()
+            }
             if (isFullscreen) {
                 exitFullscreen(activity)
             }
@@ -649,20 +654,37 @@ fun LivePlayerScreen(
         }
     }
 
+    LaunchedEffect(isLeaving) {
+        if (isLeaving) {
+            withFrameNanos { }
+            onNavigateBack()
+        }
+    }
+
+    BackHandler {
+        if (isFullscreen) {
+            isFullscreen = false
+        } else {
+            leavePlayer()
+        }
+    }
+
+    if (isLeaving) {
+        CinemaBackground(modifier = Modifier.fillMaxSize()) {}
+        return
+    }
+
     val playerViewFactory: @Composable () -> Unit = {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    setShutterBackgroundColor(android.graphics.Color.BLACK)
-                }
+                createTexturePlayerView(ctx)
             },
             onRelease = { playerView ->
                 playerView.player = null
+                playerView.onPause()
             },
             update = { playerView ->
-                playerView.player = viewModel.getPlayer()
+                playerView.player = if (isLeaving) null else viewModel.getPlayer()
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -674,15 +696,15 @@ fun LivePlayerScreen(
                 if (!isFullscreen) {
                     PlayerEpisodeTopBar(
                         title = title.ifBlank { "直播频道" },
-                        onNavigateBack = onNavigateBack
+                        onNavigateBack = leavePlayer
                     )
 
                     PlayerSurface(
                         isFullscreen = false,
                         showControls = showControls,
                         isPlaying = isPlaying,
-                        currentPosition = currentPosition,
-                        duration = duration,
+                        currentPositionState = currentPositionState,
+                        durationState = durationState,
                         playbackUiState = playbackUiState,
                         recoveringTitle = "正在连接直播流",
                         brightnessOverlay = brightnessOverlay,
@@ -716,43 +738,19 @@ fun LivePlayerScreen(
                         .padding(horizontal = 18.dp, vertical = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = livePlayerSubtitle(
-                            group = group,
-                            format = format,
-                            liveUrl = activeLiveUrl,
-                            playbackUiState = playbackUiState
-                        ),
-                        color = AppColors.TextSecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 20.sp
-                    )
-
-                    LinearProgressIndicator(
-                        progress = { if (duration > 0) currentPosition.toFloat() / duration else 0f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(5.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = AppColors.Primary,
-                        trackColor = AppColors.SurfaceRaised
-                    )
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PlayerMetaPill("直播")
-                        PlayerMetaPill(playerSourceLabel(activeLiveUrl))
-                        PlayerMetaPill(format.ifBlank { "IPTV" })
-                    }
-
-                    PlaybackStatsRow(stats = playbackStats)
-
-                    PlayerSourceLinkRow(
-                        url = activeLiveUrl,
-                        onCopyClick = {
+                    LivePlaybackInfo(
+                        group = group,
+                        format = format,
+                        liveUrlState = activeLiveUrlState,
+                        currentPositionState = currentPositionState,
+                        durationState = durationState,
+                        playbackUiState = playbackUiState,
+                        playbackStatsState = playbackStatsState,
+                        onCopyClick = { url ->
                             copyPlayerSourceLink(
                                 context = context,
                                 clipboardManager = clipboardManager,
-                                url = activeLiveUrl
+                                url = url
                             )
                         }
                     )
@@ -854,8 +852,8 @@ fun LivePlayerScreen(
                     isFullscreen = true,
                     showControls = showControls,
                     isPlaying = isPlaying,
-                    currentPosition = currentPosition,
-                    duration = duration,
+                    currentPositionState = currentPositionState,
+                    durationState = durationState,
                     playbackUiState = playbackUiState,
                     recoveringTitle = "正在连接直播流",
                     brightnessOverlay = brightnessOverlay,
@@ -957,6 +955,122 @@ fun LivePlayerScreen(
 }
 
 @Composable
+private fun EpisodePlaybackInfo(
+    episodeUrlState: State<String>,
+    currentPositionState: State<Long>,
+    durationState: State<Long>,
+    playbackUiState: PlaybackUiState,
+    playbackStatsState: State<PlaybackStats>,
+    onCopyClick: (String) -> Unit
+) {
+    val episodeUrl = episodeUrlState.value
+    val currentPosition = currentPositionState.value
+    val duration = durationState.value
+    val sourceLabel = remember(episodeUrl) { playerSourceLabel(episodeUrl) }
+
+    Text(
+        text = episodePlayerSubtitle(
+            sourceLabel = sourceLabel,
+            currentPosition = currentPosition,
+            duration = duration,
+            playbackUiState = playbackUiState
+        ),
+        color = AppColors.TextSecondary,
+        fontSize = 13.sp,
+        lineHeight = 20.sp
+    )
+
+    PlayerProgressBar(
+        currentPosition = currentPosition,
+        duration = duration
+    )
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PlayerMetaPill(formatTime(currentPosition))
+        PlayerMetaPill(sourceLabel)
+        PlayerMetaPill(
+            if (duration > 0L) {
+                "${((currentPosition * 100f) / duration).toInt()}%"
+            } else {
+                "准备中"
+            }
+        )
+    }
+
+    PlaybackStatsRow(stats = playbackStatsState.value)
+
+    PlayerSourceLinkRow(
+        url = episodeUrl,
+        onCopyClick = { onCopyClick(episodeUrl) }
+    )
+}
+
+@Composable
+private fun LivePlaybackInfo(
+    group: String,
+    format: String,
+    liveUrlState: State<String>,
+    currentPositionState: State<Long>,
+    durationState: State<Long>,
+    playbackUiState: PlaybackUiState,
+    playbackStatsState: State<PlaybackStats>,
+    onCopyClick: (String) -> Unit
+) {
+    val liveUrl = liveUrlState.value
+    val currentPosition = currentPositionState.value
+    val duration = durationState.value
+    val sourceLabel = remember(liveUrl) { playerSourceLabel(liveUrl) }
+
+    Text(
+        text = livePlayerSubtitle(
+            group = group,
+            format = format,
+            sourceLabel = sourceLabel,
+            playbackUiState = playbackUiState
+        ),
+        color = AppColors.TextSecondary,
+        fontSize = 13.sp,
+        lineHeight = 20.sp
+    )
+
+    PlayerProgressBar(
+        currentPosition = currentPosition,
+        duration = duration
+    )
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PlayerMetaPill("直播")
+        PlayerMetaPill(sourceLabel)
+        PlayerMetaPill(format.ifBlank { "IPTV" })
+    }
+
+    PlaybackStatsRow(stats = playbackStatsState.value)
+
+    PlayerSourceLinkRow(
+        url = liveUrl,
+        onCopyClick = { onCopyClick(liveUrl) }
+    )
+}
+
+@Composable
+private fun PlayerProgressBar(
+    currentPosition: Long,
+    duration: Long
+) {
+    LinearProgressIndicator(
+        progress = {
+            if (duration > 0) currentPosition.toFloat() / duration else 0f
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(5.dp)
+            .clip(RoundedCornerShape(4.dp)),
+        color = AppColors.Primary,
+        trackColor = AppColors.SurfaceRaised
+    )
+}
+
+@Composable
 private fun PlayerEpisodeTopBar(
     title: String,
     onNavigateBack: () -> Unit
@@ -999,14 +1113,133 @@ private fun PlayerEpisodeTopBar(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EpisodeSourceDialog(
+    sourceOptions: List<PlayerSourceOption>,
+    currentEpisodeLabel: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = AppColors.Surface,
+        titleContentColor = AppColors.TextPrimary,
+        textContentColor = AppColors.TextSecondary,
+        title = { Text("播放换源") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = if (sourceOptions.isEmpty()) {
+                        "正在查找同集可用线路..."
+                    } else {
+                        "${currentEpisodeLabel.ifBlank { "当前集" }} · ${sourceOptions.size}条线路"
+                    },
+                    color = AppColors.TextTertiary,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
+
+                if (sourceOptions.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        sourceOptions.forEach { option ->
+                            EpisodeSourcePill(
+                                option = option,
+                                fallbackEpisodeLabel = currentEpisodeLabel,
+                                onClick = { onSelect(option.key) }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("关闭")
+            }
+        }
+    )
+}
+
+@Composable
+private fun EpisodeSourcePill(
+    option: PlayerSourceOption,
+    fallbackEpisodeLabel: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .widthIn(min = 76.dp, max = 126.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(
+                if (option.isCurrent) {
+                    Brush.linearGradient(listOf(AppColors.Primary, AppColors.Primary))
+                } else {
+                    Brush.linearGradient(listOf(AppColors.Surface, AppColors.SurfaceAlt))
+                }
+            )
+            .then(
+                if (option.isCurrent) {
+                    Modifier
+                } else {
+                    Modifier.border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 7.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f, fill = false),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = option.sourceName,
+                color = if (option.isCurrent) AppColors.OnPrimary else AppColors.TextPrimary,
+                fontSize = 11.sp,
+                lineHeight = 13.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = option.episodeLabel.ifBlank { fallbackEpisodeLabel.ifBlank { "当前集" } },
+                color = if (option.isCurrent) AppColors.OnPrimary.copy(alpha = 0.82f) else AppColors.TextTertiary,
+                fontSize = 9.sp,
+                lineHeight = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (option.isCurrent) {
+            Text(
+                text = "当前",
+                color = AppColors.OnPrimary,
+                fontSize = 9.sp,
+                lineHeight = 11.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 1
+            )
+        }
+    }
+}
+
 @Composable
 private fun PlayerSurface(
     modifier: Modifier = Modifier,
     isFullscreen: Boolean,
     showControls: Boolean,
     isPlaying: Boolean,
-    currentPosition: Long,
-    duration: Long,
+    currentPositionState: State<Long>,
+    durationState: State<Long>,
     playbackUiState: PlaybackUiState,
     recoveringTitle: String = "正在切换备用线路",
     brightnessOverlay: Float?,
@@ -1032,8 +1265,6 @@ private fun PlayerSurface(
     context: Context,
     playerViewFactory: @Composable () -> Unit
 ) {
-    val currentPositionState = rememberUpdatedState(currentPosition)
-    val durationState = rememberUpdatedState(duration)
     val onSeekToState = rememberUpdatedState(onSeekTo)
     val onToggleControlsState = rememberUpdatedState(onToggleControls)
     val onTogglePlayState = rememberUpdatedState(onTogglePlay)
@@ -1055,7 +1286,7 @@ private fun PlayerSurface(
                     Modifier
                         .padding(horizontal = 18.dp)
                         .fillMaxWidth()
-                        .height(292.dp)
+                        .aspectRatio(16f / 9f)
                         .clip(RoundedCornerShape(4.dp))
                         .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
                 }
@@ -1178,7 +1409,7 @@ private fun PlayerSurface(
         seekOverlayPosition?.let { position ->
             GestureOverlay(
                 icon = if (seekOverlayForward) Icons.Default.FastForward else Icons.Default.FastRewind,
-                text = "${formatTime(position)} / ${formatTime(duration)}"
+                text = "${formatTime(position)} / ${formatTime(durationState.value)}"
             )
         }
 
@@ -1255,6 +1486,8 @@ private fun PlayerSurface(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val currentPosition = currentPositionState.value
+                        val duration = durationState.value
                         Text(
                             text = formatTime(currentPosition),
                             color = Color.White,
@@ -1378,6 +1611,18 @@ private fun PlayerSurface(
                 }
             }
         }
+    }
+}
+
+private fun createTexturePlayerView(context: Context): PlayerView {
+    return (LayoutInflater.from(context).inflate(
+        R.layout.view_texture_player,
+        null,
+        false
+    ) as PlayerView).apply {
+        useController = false
+        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+        setShutterBackgroundColor(android.graphics.Color.BLACK)
     }
 }
 
@@ -1638,14 +1883,16 @@ private fun PlayerUtilityButton(
     icon: ImageVector,
     label: String?,
     onClick: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
     shape: RoundedCornerShape = RoundedCornerShape(4.dp)
 ) {
     Surface(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier,
-        color = AppColors.SurfaceAlt,
-        contentColor = AppColors.TextPrimary,
+        color = if (enabled) AppColors.SurfaceAlt else AppColors.Surface,
+        contentColor = if (enabled) AppColors.TextPrimary else AppColors.TextTertiary,
         shape = shape,
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
@@ -1660,13 +1907,14 @@ private fun PlayerUtilityButton(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = AppColors.TextPrimary,
+                tint = if (enabled) AppColors.TextPrimary else AppColors.TextTertiary,
                 modifier = Modifier.size(16.dp)
             )
             if (label != null) {
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = label,
+                    color = if (enabled) AppColors.TextPrimary else AppColors.TextTertiary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -1871,7 +2119,7 @@ private fun copyPlayerSourceLink(
 }
 
 private fun episodePlayerSubtitle(
-    episodeUrl: String,
+    sourceLabel: String,
     currentPosition: Long,
     duration: Long,
     playbackUiState: PlaybackUiState
@@ -1882,20 +2130,20 @@ private fun episodePlayerSubtitle(
     return if (duration > 0L) {
         "已播放 ${formatTime(currentPosition)} / ${formatTime(duration)}"
     } else {
-        "${playerSourceLabel(episodeUrl)} 线路准备中"
+        "$sourceLabel 线路准备中"
     }
 }
 
 private fun livePlayerSubtitle(
     group: String,
     format: String,
-    liveUrl: String,
+    sourceLabel: String,
     playbackUiState: PlaybackUiState
 ): String {
     if (playbackUiState.isRecovering || playbackUiState.isFailed) {
         return playbackUiState.message
     }
-    val meta = listOf(group, format, playerSourceLabel(liveUrl))
+    val meta = listOf(group, format, sourceLabel)
         .filter { it.isNotBlank() }
         .joinToString(" · ")
     return if (meta.isBlank()) "直播线路已接入" else "$meta · 直播线路已接入"

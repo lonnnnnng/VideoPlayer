@@ -90,7 +90,11 @@ fun LiveSourceManagementScreen(
                     contentPadding = PaddingValues(Dimens.paddingMedium),
                     verticalArrangement = Arrangement.spacedBy(Dimens.paddingSmall)
                 ) {
-                    itemsIndexed(sources) { index, source ->
+                    itemsIndexed(
+                        items = sources,
+                        key = { _, source -> source.id },
+                        contentType = { _, _ -> "live-source-row" }
+                    ) { index, source ->
                         LiveSourceItem(
                             source = source,
                             canMoveUp = index > 0,

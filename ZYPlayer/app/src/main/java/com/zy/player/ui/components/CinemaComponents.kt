@@ -67,15 +67,7 @@ fun CinemaBackground(
 ) {
     Box(
         modifier = modifier
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFFFDFEFF),
-                        AppColors.Background,
-                        AppColors.Shell
-                    )
-                )
-            )
+            .background(AppColors.Background)
     ) {
         content()
     }

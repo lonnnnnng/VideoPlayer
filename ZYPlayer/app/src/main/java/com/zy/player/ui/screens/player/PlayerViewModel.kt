@@ -51,6 +51,14 @@ data class PlayerSourceOption(
     val isCurrent: Boolean
 )
 
+data class EpisodeNavigationState(
+    val currentLabel: String = "",
+    val previousLabel: String? = null,
+    val nextLabel: String? = null,
+    val hasPrevious: Boolean = false,
+    val hasNext: Boolean = false
+)
+
 data class PlaybackStats(
     val resolutionWidth: Int = 0,
     val resolutionHeight: Int = 0,
@@ -92,6 +100,12 @@ class PlayerViewModel @Inject constructor(
         val key: String = url
     }
 
+    private data class EpisodeNavigationItem(
+        val label: String,
+        val url: String,
+        val groupName: String
+    )
+
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
@@ -107,11 +121,19 @@ class PlayerViewModel @Inject constructor(
     private val _activeEpisodeUrl = MutableStateFlow(episodeUrl)
     val activeEpisodeUrl: StateFlow<String> = _activeEpisodeUrl.asStateFlow()
 
+    private val _activeEpisodeLabel = MutableStateFlow(episodeLabel)
+    val activeEpisodeLabel: StateFlow<String> = _activeEpisodeLabel.asStateFlow()
+
     private val _playbackUiState = MutableStateFlow(PlaybackUiState())
     val playbackUiState: StateFlow<PlaybackUiState> = _playbackUiState.asStateFlow()
 
     private val _sourceOptions = MutableStateFlow<List<PlayerSourceOption>>(emptyList())
     val sourceOptions: StateFlow<List<PlayerSourceOption>> = _sourceOptions.asStateFlow()
+
+    private val _episodeNavigation = MutableStateFlow(
+        EpisodeNavigationState(currentLabel = episodeLabel)
+    )
+    val episodeNavigation: StateFlow<EpisodeNavigationState> = _episodeNavigation.asStateFlow()
 
     private val _playbackStats = MutableStateFlow(PlaybackStats())
     val playbackStats: StateFlow<PlaybackStats> = _playbackStats.asStateFlow()
@@ -121,6 +143,14 @@ class PlayerViewModel @Inject constructor(
     private var currentCandidateIndex = 0
     private var fallbackCandidatesLoaded = false
     private var fallbackLoadJob: Job? = null
+    private var currentEpisodeLabel = episodeLabel
+    private var episodeNavigationSiteId = siteId
+    private var episodeNavigationVodId = vodId
+    private var episodeNavigationGroupName = ""
+    private var episodeNavigationItems = emptyList<EpisodeNavigationItem>()
+    private var episodeNavigationIndex = -1
+    private var episodeNavigationJob: Job? = null
+    private var episodeNavigationRequestKey = ""
     private var isRecoveringPlayback = false
     private var networkSpeedUpdateJob: Job? = null
     private val transferSamples = ArrayDeque<TransferSample>()
@@ -229,7 +259,7 @@ class PlayerViewModel @Inject constructor(
             viewModelScope.launch {
                 startInitialPlayback()
             }
-            preloadFallbackCandidates()
+            preloadEpisodeNavigationForCurrentCandidate()
         } else {
             Log.w(TAG, "init - episodeUrl is blank, not starting playback")
             _playbackUiState.value = PlaybackUiState(
@@ -270,6 +300,7 @@ class PlayerViewModel @Inject constructor(
         stopProgressUpdates()
         stopNetworkSpeedUpdates()
         fallbackLoadJob?.cancel()
+        episodeNavigationJob?.cancel()
         playerManager.stopAndRelease()
     }
 
@@ -319,6 +350,14 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    fun playPreviousEpisode() {
+        playAdjacentEpisode(-1)
+    }
+
+    fun playNextEpisode() {
+        playAdjacentEpisode(1)
+    }
+
     private suspend fun startInitialPlayback() {
         val candidate = playbackCandidates.firstOrNull()
         if (candidate == null) {
@@ -359,11 +398,15 @@ class PlayerViewModel @Inject constructor(
         val candidate = playbackCandidates.getOrNull(index) ?: return
         currentCandidateIndex = index
         _activeEpisodeUrl.value = candidate.url
+        currentEpisodeLabel = candidate.episodeLabel
+        _activeEpisodeLabel.value = candidate.episodeLabel
         _currentPosition.value = 0L
         _duration.value = 0L
         resetNetworkSpeedSamples()
         _playbackStats.value = PlaybackStats()
         publishSourceOptions()
+        syncEpisodeNavigationWithCandidate(candidate)
+        preloadEpisodeNavigationForCurrentCandidate()
         _playbackUiState.value = PlaybackUiState(
             sourceName = candidate.sourceName,
             message = "正在连接 ${candidate.sourceName}",
@@ -442,7 +485,8 @@ class PlayerViewModel @Inject constructor(
     }
 
     private suspend fun loadFallbackCandidates(updateUi: Boolean): List<PlaybackCandidate> {
-        if (title.isBlank() || episodeLabel.isBlank()) return emptyList()
+        val targetEpisodeLabel = currentEpisodeLabel
+        if (title.isBlank() || targetEpisodeLabel.isBlank()) return emptyList()
 
         if (updateUi) {
             _playbackUiState.value = PlaybackUiState(
@@ -492,7 +536,7 @@ class PlayerViewModel @Inject constructor(
                     vodId = vod.vod_id.toString(),
                     sourceName = site.name,
                     groups = groups,
-                    label = episodeLabel
+                    label = targetEpisodeLabel
                 )
             }
         }
@@ -598,6 +642,166 @@ class PlayerViewModel @Inject constructor(
                 isCurrent = index == currentCandidateIndex
             )
         }
+    }
+
+    private fun preloadEpisodeNavigationForCurrentCandidate() {
+        val candidate = playbackCandidates.getOrNull(currentCandidateIndex) ?: return
+        if (candidate.siteId <= 0L || candidate.vodId.isBlank() || candidate.vodId == "online") return
+        val requestKey = episodeNavigationRequestKey(candidate)
+        if (
+            episodeNavigationItems.isNotEmpty() &&
+            episodeNavigationSiteId == candidate.siteId &&
+            episodeNavigationVodId == candidate.vodId
+        ) {
+            val candidateGroupName = episodeNavigationGroupName(candidate)
+            val belongsToCurrentGroup = episodeNavigationItems.any { it.url == candidate.url } ||
+                candidateGroupName.isBlank() ||
+                candidateGroupName == episodeNavigationGroupName
+            if (belongsToCurrentGroup) {
+                syncEpisodeNavigationWithCandidate(candidate)
+                return
+            }
+            episodeNavigationItems = emptyList()
+            episodeNavigationIndex = -1
+            _episodeNavigation.value = EpisodeNavigationState(currentLabel = candidate.episodeLabel)
+        }
+        if (episodeNavigationJob?.isActive == true && episodeNavigationRequestKey == requestKey) return
+        episodeNavigationJob?.cancel()
+        episodeNavigationRequestKey = requestKey
+
+        episodeNavigationJob = viewModelScope.launch {
+            loadEpisodeNavigation(candidate)
+        }
+    }
+
+    private suspend fun loadEpisodeNavigation(candidate: PlaybackCandidate) {
+        val site = siteRepository.getAllSites().firstOrNull { it.id == candidate.siteId } ?: return
+        val vod = vodRepository.getVodDetail(
+            site.apiUrl,
+            candidate.vodId,
+            timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
+        ).getOrNull()?.list?.firstOrNull() ?: return
+
+        val groups = VodPlayUrlParser.parseGroups(vod.vod_play_from, vod.vod_play_url)
+        val selectedGroup = selectEpisodeNavigationGroup(groups, candidate) ?: return
+        val items = selectedGroup.episodes.map { episode ->
+            EpisodeNavigationItem(
+                label = episode.label,
+                url = episode.url,
+                groupName = selectedGroup.name
+            )
+        }
+        if (items.isEmpty()) return
+
+        val activeCandidate = playbackCandidates.getOrNull(currentCandidateIndex) ?: return
+        if (episodeNavigationRequestKey(candidate) != episodeNavigationRequestKey) return
+        if (activeCandidate.siteId != candidate.siteId || activeCandidate.vodId != candidate.vodId) return
+        if (activeCandidate.url != candidate.url && !labelsMatch(activeCandidate.episodeLabel, candidate.episodeLabel)) return
+
+        episodeNavigationSiteId = candidate.siteId
+        episodeNavigationVodId = candidate.vodId
+        episodeNavigationGroupName = selectedGroup.name
+        episodeNavigationItems = items
+        episodeNavigationIndex = findEpisodeIndex(items, candidate)
+        publishEpisodeNavigation()
+    }
+
+    private fun selectEpisodeNavigationGroup(
+        groups: List<EpisodeGroup>,
+        candidate: PlaybackCandidate
+    ): EpisodeGroup? {
+        return groups.firstOrNull { group ->
+            group.episodes.any { it.url == candidate.url }
+        } ?: groups.firstOrNull { group ->
+            val candidateLineName = episodeNavigationGroupName(candidate)
+            candidateLineName.isNotBlank() && group.name == candidateLineName
+        } ?: groups.firstOrNull { group ->
+            group.episodes.any { labelsMatch(it.label, candidate.episodeLabel) }
+        } ?: groups.firstOrNull()
+    }
+
+    private fun findEpisodeIndex(
+        items: List<EpisodeNavigationItem>,
+        candidate: PlaybackCandidate
+    ): Int {
+        return items.indexOfFirst { it.url == candidate.url }
+            .takeIf { it >= 0 }
+            ?: items.indexOfFirst { labelsMatch(it.label, candidate.episodeLabel) }
+                .takeIf { it >= 0 }
+            ?: 0
+    }
+
+    private fun syncEpisodeNavigationWithCandidate(candidate: PlaybackCandidate) {
+        if (episodeNavigationItems.isEmpty()) {
+            _episodeNavigation.value = EpisodeNavigationState(currentLabel = candidate.episodeLabel)
+            return
+        }
+        if (episodeNavigationSiteId != candidate.siteId || episodeNavigationVodId != candidate.vodId) {
+            episodeNavigationItems = emptyList()
+            episodeNavigationIndex = -1
+            _episodeNavigation.value = EpisodeNavigationState(currentLabel = candidate.episodeLabel)
+            return
+        }
+        episodeNavigationIndex = findEpisodeIndex(episodeNavigationItems, candidate)
+        publishEpisodeNavigation()
+    }
+
+    private fun publishEpisodeNavigation() {
+        val index = episodeNavigationIndex
+        val currentItem = episodeNavigationItems.getOrNull(index)
+        _episodeNavigation.value = EpisodeNavigationState(
+            currentLabel = currentItem?.label ?: currentEpisodeLabel,
+            previousLabel = episodeNavigationItems.getOrNull(index - 1)?.label,
+            nextLabel = episodeNavigationItems.getOrNull(index + 1)?.label,
+            hasPrevious = index > 0,
+            hasNext = index >= 0 && index < episodeNavigationItems.lastIndex
+        )
+    }
+
+    private fun playAdjacentEpisode(delta: Int) {
+        val targetIndex = episodeNavigationIndex + delta
+        val target = episodeNavigationItems.getOrNull(targetIndex) ?: return
+        val currentCandidate = playbackCandidates.getOrNull(currentCandidateIndex)
+        val candidate = PlaybackCandidate(
+            siteId = currentCandidate?.siteId ?: episodeNavigationSiteId,
+            vodId = currentCandidate?.vodId ?: episodeNavigationVodId,
+            url = target.url,
+            sourceName = buildAdjacentEpisodeSourceName(currentCandidate?.sourceName, target.groupName),
+            episodeLabel = target.label
+        )
+
+        fallbackLoadJob?.cancel()
+        fallbackCandidatesLoaded = false
+        playbackCandidates.clear()
+        playbackCandidates += candidate
+        currentCandidateIndex = 0
+        episodeNavigationIndex = targetIndex
+        currentEpisodeLabel = target.label
+        _activeEpisodeLabel.value = target.label
+        publishSourceOptions()
+        publishEpisodeNavigation()
+        playCandidate(0)
+    }
+
+    private fun buildAdjacentEpisodeSourceName(currentSourceName: String?, groupName: String): String {
+        if (currentSourceName.isNullOrBlank()) {
+            return groupName.ifBlank { "当前线路" }
+        }
+        if (groupName.isBlank()) return currentSourceName
+        val siteName = currentSourceName.substringBefore('/', missingDelimiterValue = "")
+        return if (siteName.isNotBlank() && siteName != currentSourceName) {
+            "$siteName/$groupName"
+        } else {
+            currentSourceName
+        }
+    }
+
+    private fun episodeNavigationRequestKey(candidate: PlaybackCandidate): String {
+        return "${candidate.siteId}|${candidate.vodId}|${candidate.url}|${candidate.episodeLabel}"
+    }
+
+    private fun episodeNavigationGroupName(candidate: PlaybackCandidate): String {
+        return candidate.sourceName.substringAfterLast('/', missingDelimiterValue = "")
     }
 
     private fun currentSourceName(): String {
@@ -741,6 +945,7 @@ class PlayerViewModel @Inject constructor(
         stopProgressUpdates()
         stopNetworkSpeedUpdates()
         fallbackLoadJob?.cancel()
+        episodeNavigationJob?.cancel()
         playerManager.stopAndRelease()
         playerManager.removeAnalyticsListener(analyticsListener)
         playerManager.removeTransferByteListener(transferByteListener)
@@ -836,6 +1041,8 @@ class LivePlayerViewModel @Inject constructor(
     private val failedLineUrls = mutableSetOf<String>()
     private var currentCandidateIndex = 0
     private var sameNameLinesLoaded = false
+    private var sameNameLinesLoading = false
+    private var sameNameLinesJob: Job? = null
     private var isSwitchingLine = false
     private val transferSamples = ArrayDeque<TransferSample>()
     private val transferSamplesLock = Any()
@@ -930,9 +1137,7 @@ class LivePlayerViewModel @Inject constructor(
             )
             publishLineOptions()
             playLiveCandidate(0)
-            viewModelScope.launch {
-                ensureSameNameLinesLoaded()
-            }
+            scheduleSameNameLinesPreload()
         } else {
             _playbackUiState.value = PlaybackUiState(
                 sourceName = "IPTV直播",
@@ -967,6 +1172,9 @@ class LivePlayerViewModel @Inject constructor(
 
     fun loadLiveLineOptions() {
         viewModelScope.launch {
+            if (!sameNameLinesLoading) {
+                sameNameLinesJob?.cancel()
+            }
             ensureSameNameLinesLoaded()
         }
     }
@@ -990,6 +1198,7 @@ class LivePlayerViewModel @Inject constructor(
         _isPlaying.value = false
         stopProgressUpdates()
         stopNetworkSpeedUpdates()
+        sameNameLinesJob?.cancel()
         playerManager.stopAndRelease()
     }
 
@@ -1050,48 +1259,64 @@ class LivePlayerViewModel @Inject constructor(
         }
     }
 
+    private fun scheduleSameNameLinesPreload() {
+        if (sameNameLinesLoaded || sameNameLinesLoading || sameNameLinesJob?.isActive == true) return
+        sameNameLinesJob = viewModelScope.launch {
+            delay(2_500L)
+            ensureSameNameLinesLoaded()
+        }
+    }
+
     private suspend fun ensureSameNameLinesLoaded() {
         if (sameNameLinesLoaded) {
             publishLineOptions()
             return
         }
-        sameNameLinesLoaded = true
+        if (sameNameLinesLoading) return
+        sameNameLinesLoading = true
 
-        if (channelTitle.isBlank()) {
-            publishLineOptions()
-            return
+        try {
+            if (channelTitle.isBlank()) {
+                sameNameLinesLoaded = true
+                publishLineOptions()
+                return
+            }
+
+            val enabledSources = liveRepository.getEnabledSources()
+            if (enabledSources.isEmpty()) {
+                sameNameLinesLoaded = true
+                publishLineOptions()
+                return
+            }
+
+            val targetName = normalizeLiveChannelName(channelTitle)
+            val orderedSources = enabledSources.sortedBy { source ->
+                if (source.id == sourceId) 0 else 1
+            }
+            val candidates = orderedSources.flatMap { source ->
+                liveRepository.fetchAndParseChannels(
+                    source.url,
+                    timeoutMs = networkSettingsRepository.currentSettings().liveSourceTimeoutMs
+                )
+                    .getOrNull()
+                    .orEmpty()
+                    .filter { normalizeLiveChannelName(it.name) == targetName }
+                    .map { channel ->
+                        LivePlaybackCandidate(
+                            url = channel.url,
+                            sourceName = source.name,
+                            channelName = channel.name,
+                            group = channel.group,
+                            format = channel.format
+                        )
+                    }
+            }.distinctBy { it.url }
+
+            mergeLivePlaybackCandidates(candidates)
+            sameNameLinesLoaded = true
+        } finally {
+            sameNameLinesLoading = false
         }
-
-        val enabledSources = liveRepository.getEnabledSources()
-        if (enabledSources.isEmpty()) {
-            publishLineOptions()
-            return
-        }
-
-        val targetName = normalizeLiveChannelName(channelTitle)
-        val orderedSources = enabledSources.sortedBy { source ->
-            if (source.id == sourceId) 0 else 1
-        }
-        val candidates = orderedSources.flatMap { source ->
-            liveRepository.fetchAndParseChannels(
-                source.url,
-                timeoutMs = networkSettingsRepository.currentSettings().liveSourceTimeoutMs
-            )
-                .getOrNull()
-                .orEmpty()
-                .filter { normalizeLiveChannelName(it.name) == targetName }
-                .map { channel ->
-                    LivePlaybackCandidate(
-                        url = channel.url,
-                        sourceName = source.name,
-                        channelName = channel.name,
-                        group = channel.group,
-                        format = channel.format
-                    )
-                }
-        }.distinctBy { it.url }
-
-        mergeLivePlaybackCandidates(candidates)
     }
 
     private fun mergeLivePlaybackCandidates(candidates: List<LivePlaybackCandidate>) {
@@ -1290,6 +1515,7 @@ class LivePlayerViewModel @Inject constructor(
         Log.d(TAG, "onCleared - Cleaning up")
         stopProgressUpdates()
         stopNetworkSpeedUpdates()
+        sameNameLinesJob?.cancel()
         playerManager.stopAndRelease()
         playerManager.removeAnalyticsListener(analyticsListener)
         playerManager.removeTransferByteListener(transferByteListener)

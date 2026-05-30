@@ -11,10 +11,13 @@ import com.zy.player.data.repository.VodRepository
 import com.zy.player.domain.model.EpisodeGroup
 import com.zy.player.domain.parser.VodPlayUrlParser
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
 
 data class DetailSourceOption(
@@ -46,6 +49,7 @@ class DetailViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "DetailViewModel"
+        private const val SOURCE_AGGREGATION_PARALLELISM = 4
     }
 
     private val siteId: Long = savedStateHandle.get<Long>("siteId") ?: 0L
@@ -133,26 +137,29 @@ class DetailViewModel @Inject constructor(
         val title = primarySource.vodDetail.vod_name
         val extraSites = enabledSites.filterNot { it.id == primarySource.siteId }
         val resultChannel = Channel<DetailSourceOption?>(Channel.UNLIMITED)
+        val semaphore = Semaphore(SOURCE_AGGREGATION_PARALLELISM)
 
         extraSites.forEach { site ->
-            launch {
-                val matchedVod = vodRepository.getVodList(
-                    baseUrl = site.apiUrl,
-                    page = 1,
-                    keyword = title
-                ).getOrNull()
-                        ?.list
-                        .orEmpty()
-                        .let { list ->
-                            list.firstOrNull { normalizeTitle(it.vod_name) == normalizeTitle(title) }
-                                ?: list.firstOrNull { normalizeTitle(it.vod_name).contains(normalizeTitle(title)) }
-                        }
+            launch(Dispatchers.IO) {
+                val source = semaphore.withPermit {
+                    val matchedVod = vodRepository.getVodList(
+                        baseUrl = site.apiUrl,
+                        page = 1,
+                        keyword = title
+                    ).getOrNull()
+                            ?.list
+                            .orEmpty()
+                            .let { list ->
+                                list.firstOrNull { normalizeTitle(it.vod_name) == normalizeTitle(title) }
+                                    ?: list.firstOrNull { normalizeTitle(it.vod_name).contains(normalizeTitle(title)) }
+                            }
 
-                resultChannel.send(
                     matchedVod?.let { vod ->
                         loadSourceDetail(site, vod.vod_id.toString())
                     }
-                )
+                }
+
+                resultChannel.send(source)
             }
         }
 
@@ -192,6 +199,10 @@ class DetailViewModel @Inject constructor(
                     vodDetail.vod_play_from,
                     vodDetail.vod_play_url
                 )
+                if (episodeGroups.isEmpty()) {
+                    Log.d(TAG, "loadSourceDetail - source=${site.name}, no m3u8 episodes, skipped")
+                    return@let null
+                }
 
                 Log.d(
                     TAG,
