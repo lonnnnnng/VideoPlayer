@@ -21,7 +21,9 @@ import com.zy.player.data.repository.VodRepository
 import com.zy.player.domain.model.EpisodeGroup
 import com.zy.player.domain.model.EpisodeItem
 import com.zy.player.domain.parser.VodPlayUrlParser
+import com.zy.player.player.AudioPlaybackKeepAliveService
 import com.zy.player.player.PlayerManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +38,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import android.content.Context
 
 data class PlaybackUiState(
     val sourceName: String = "线路",
@@ -1543,6 +1546,7 @@ class LivePlayerViewModel @Inject constructor(
 
 @HiltViewModel
 class RadioPlayerViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val playerManager: PlayerManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -1619,6 +1623,9 @@ class RadioPlayerViewModel @Inject constructor(
                     )
                 }
                 Player.STATE_ENDED -> {
+                    _isPlaying.value = false
+                    stopProgressUpdates()
+                    AudioPlaybackKeepAliveService.stop(context)
                     _playbackUiState.value = PlaybackUiState(
                         sourceName = sourceName,
                         message = "电台流已结束",
@@ -1633,6 +1640,7 @@ class RadioPlayerViewModel @Inject constructor(
             Log.e(TAG, "onPlayerError - errorCode=${error.errorCode}, message=${error.message}", error)
             _isPlaying.value = false
             stopProgressUpdates()
+            AudioPlaybackKeepAliveService.stop(context)
             _playbackUiState.value = PlaybackUiState(
                 sourceName = radioTitle.ifBlank { "网络电台" },
                 message = error.message ?: "电台流不可用",
@@ -1677,6 +1685,7 @@ class RadioPlayerViewModel @Inject constructor(
         _isPlaying.value = false
         stopProgressUpdates()
         stopNetworkSpeedUpdates()
+        AudioPlaybackKeepAliveService.stop(context)
         playerManager.stopAndRelease()
     }
 
@@ -1689,6 +1698,11 @@ class RadioPlayerViewModel @Inject constructor(
             sourceName = radioTitle.ifBlank { "网络电台" },
             message = "正在连接 ${radioTitle.ifBlank { "网络电台" }}",
             isRecovering = true
+        )
+        AudioPlaybackKeepAliveService.start(
+            context = context,
+            title = radioTitle.ifBlank { "音频播放中" },
+            subtitle = "锁屏后将继续播放"
         )
         playerManager.play(radioUrl)
     }
@@ -1766,6 +1780,7 @@ class RadioPlayerViewModel @Inject constructor(
         super.onCleared()
         stopProgressUpdates()
         stopNetworkSpeedUpdates()
+        AudioPlaybackKeepAliveService.stop(context)
         playerManager.stopAndRelease()
         playerManager.removeTransferByteListener(transferByteListener)
         playerManager.removeListener(playerListener)

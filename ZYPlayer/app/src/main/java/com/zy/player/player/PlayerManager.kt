@@ -3,6 +3,8 @@ package com.zy.player.player
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
@@ -83,6 +85,17 @@ class PlayerManager @Inject constructor(
             exoPlayer = ExoPlayer.Builder(context)
                 .setMediaSourceFactory(mediaSourceFactory)
                 .build()
+                .apply {
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(C.USAGE_MEDIA)
+                            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                            .build(),
+                        true
+                    )
+                    setHandleAudioBecomingNoisy(true)
+                    setWakeMode(C.WAKE_MODE_NETWORK)
+                }
         }
         return checkNotNull(exoPlayer) { "ExoPlayer initialization failed" }
     }

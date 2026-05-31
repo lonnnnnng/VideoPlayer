@@ -972,6 +972,7 @@ fun RadioPlayerScreen(
     @Suppress("UNUSED_VARIABLE")
     val unusedRouteArgs = url to sourceId
     val context = LocalContext.current
+    val activity = context as? Activity
     val clipboardManager = remember(context) {
         context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     }
@@ -987,6 +988,13 @@ fun RadioPlayerScreen(
         if (!isLeaving) {
             isLeaving = true
             viewModel.stopPlayback()
+        }
+    }
+
+    DisposableEffect(activity) {
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
