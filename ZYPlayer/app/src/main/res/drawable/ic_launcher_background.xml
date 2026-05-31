@@ -4,42 +4,41 @@
         <shape android:shape="rectangle">
             <gradient
                 android:angle="315"
-                android:startColor="#FFEAF6FF"
-                android:centerColor="#FFBFE4FF"
-                android:endColor="#FF2F8CFF" />
+                android:startColor="#FFF7FCFF"
+                android:centerColor="#FFCFEAFF"
+                android:endColor="#FF1E63FF" />
         </shape>
     </item>
     <item
-        android:left="2dp"
-        android:top="2dp"
-        android:right="2dp"
-        android:bottom="2dp">
+        android:left="0dp"
+        android:top="0dp"
+        android:right="0dp"
+        android:bottom="56dp">
         <shape android:shape="rectangle">
             <gradient
-                android:type="radial"
-                android:centerX="24%"
-                android:centerY="22%"
-                android:gradientRadius="92dp"
-                android:centerColor="#FFFFFFFF"
+                android:angle="270"
+                android:startColor="#B3FFFFFF"
                 android:endColor="#00FFFFFF" />
         </shape>
     </item>
     <item
-        android:left="42dp"
-        android:top="8dp"
-        android:right="-8dp"
-        android:bottom="42dp">
-        <shape android:shape="oval">
-            <solid android:color="#6639D5FF" />
+        android:left="-18dp"
+        android:top="76dp"
+        android:right="-18dp"
+        android:bottom="-16dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="28dp" />
+            <solid android:color="#33285CFF" />
         </shape>
     </item>
     <item
-        android:left="-10dp"
-        android:top="54dp"
-        android:right="42dp"
-        android:bottom="-8dp">
-        <shape android:shape="oval">
-            <solid android:color="#4D6BA9FF" />
+        android:left="0dp"
+        android:top="84dp"
+        android:right="0dp"
+        android:bottom="-18dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="24dp" />
+            <solid android:color="#4022D3EE" />
         </shape>
     </item>
 </layer-list>
