@@ -27,6 +27,8 @@ data class PodcastUiState(
     val isRefreshingSubscriptions: Boolean = false,
     val isRefreshingSubscriptionId: Long? = null,
     val selectedSubscriptionId: Long? = null,
+    val selectedSourceId: Long? = null,
+    val searchQuery: String = "",
     val selectedFeed: PodcastFeed? = null,
     val libraryEpisodes: List<PodcastLibraryEpisode> = emptyList(),
     val message: String? = null
@@ -179,6 +181,14 @@ class PodcastViewModel @Inject constructor(
     fun refreshLibraryIfNeeded() {
         if (hasLoadedLibrary || _uiState.value.isRefreshingLibrary) return
         refreshLibrary(force = false)
+    }
+
+    fun setSearchQuery(query: String) {
+        _uiState.value = _uiState.value.copy(searchQuery = query)
+    }
+
+    fun selectSource(sourceId: Long?) {
+        _uiState.value = _uiState.value.copy(selectedSourceId = sourceId)
     }
 
     private fun refreshLibrary(force: Boolean) {

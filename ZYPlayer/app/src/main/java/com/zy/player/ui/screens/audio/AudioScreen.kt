@@ -16,14 +16,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -51,7 +48,7 @@ private enum class AudioTab(
     val icon: ImageVector
 ) {
     Radio("电台", "直播音频", Icons.Default.Radio),
-    Podcast("播客", "订阅节目", Icons.Default.Podcasts)
+    Podcast("播客", "播客节目", Icons.Default.Podcasts)
 }
 
 @Composable
@@ -62,7 +59,6 @@ fun AudioScreen(
 ) {
     var selectedTabName by rememberSaveable { mutableStateOf(AudioTab.Radio.name) }
     val selectedTab = AudioTab.valueOf(selectedTabName)
-    val podcastUiState by podcastViewModel.uiState.collectAsState()
 
     LaunchedEffect(selectedTab) {
         if (selectedTab == AudioTab.Podcast) {
@@ -74,9 +70,7 @@ fun AudioScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             AudioHeader(
                 selectedTab = selectedTab,
-                isPodcastRefreshing = podcastUiState.isRefreshingLibrary,
-                onTabSelected = { selectedTabName = it.name },
-                onPodcastRefreshClick = podcastViewModel::refreshLibrary
+                onTabSelected = { selectedTabName = it.name }
             )
 
             Box(
@@ -109,9 +103,7 @@ fun AudioScreen(
 @Composable
 private fun AudioHeader(
     selectedTab: AudioTab,
-    isPodcastRefreshing: Boolean,
-    onTabSelected: (AudioTab) -> Unit,
-    onPodcastRefreshClick: () -> Unit
+    onTabSelected: (AudioTab) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -141,31 +133,13 @@ private fun AudioHeader(
                     fontWeight = FontWeight.Bold
                 )
             }
-            if (selectedTab == AudioTab.Podcast) {
-                IconButton(
-                    onClick = onPodcastRefreshClick,
-                    enabled = !isPodcastRefreshing,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(AppColors.PrimaryLight)
-                        .size(38.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "刷新播客节目",
-                        tint = if (isPodcastRefreshing) AppColors.TextTertiary else AppColors.Primary,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-            } else {
-                Text(
-                    text = selectedTab.subtitle,
-                    color = AppColors.Primary,
-                    fontSize = 12.sp,
-                    lineHeight = 15.sp,
-                    fontWeight = FontWeight.Black
-                )
-            }
+            Text(
+                text = selectedTab.subtitle,
+                color = AppColors.Primary,
+                fontSize = 12.sp,
+                lineHeight = 15.sp,
+                fontWeight = FontWeight.Black
+            )
         }
 
         Surface(
