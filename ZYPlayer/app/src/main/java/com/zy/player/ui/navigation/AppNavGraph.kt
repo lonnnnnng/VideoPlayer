@@ -8,9 +8,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -34,6 +34,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.zy.player.ui.screens.audio.AudioScreen
 import com.zy.player.ui.screens.detail.DetailScreen
 import com.zy.player.ui.screens.detail.EpisodeListScreen
 import com.zy.player.ui.screens.history.HistoryScreen
@@ -44,8 +45,7 @@ import com.zy.player.ui.screens.online.OnlineScreen
 import com.zy.player.ui.screens.player.EpisodePlayerScreen
 import com.zy.player.ui.screens.player.LivePlayerScreen
 import com.zy.player.ui.screens.player.RadioPlayerScreen
-import com.zy.player.ui.screens.podcast.PodcastScreen
-import com.zy.player.ui.screens.radio.RadioScreen
+import com.zy.player.ui.screens.podcast.PodcastSourceManagementScreen
 import com.zy.player.ui.screens.radiosource.RadioSourceManagementScreen
 import com.zy.player.ui.screens.search.SearchScreen
 import com.zy.player.ui.screens.searchresult.SearchResultScreen
@@ -56,7 +56,7 @@ import com.zy.player.ui.theme.AppColors
 sealed class BottomNavItem(val route: String, val icon: ImageVector, val label: String) {
     object Home : BottomNavItem(Destinations.HOME, Icons.Default.VideoLibrary, "片库")
     object Live : BottomNavItem(Destinations.LIVE, Icons.Default.LiveTv, "电视")
-    object Radio : BottomNavItem(Destinations.RADIO, Icons.Default.Radio, "电台")
+    object Audio : BottomNavItem(Destinations.AUDIO, Icons.Default.Headphones, "音频")
     object Settings : BottomNavItem(Destinations.SETTINGS, Icons.Default.Person, "我的")
 }
 
@@ -67,7 +67,7 @@ fun AppNavGraph(
     val bottomNavItems = listOf(
         BottomNavItem.Home,
         BottomNavItem.Live,
-        BottomNavItem.Radio,
+        BottomNavItem.Audio,
         BottomNavItem.Settings
     )
 
@@ -138,9 +138,9 @@ fun AppNavGraph(
                 )
             }
 
-            composable(Destinations.RADIO) {
-                RadioScreen(
-                    onNavigateToPlayer = { station, sourceId ->
+            composable(Destinations.AUDIO) {
+                AudioScreen(
+                    onNavigateToRadioPlayer = { station, sourceId ->
                         navController.navigate(
                             Destinations.radioPlayer(
                                 url = station.url,
@@ -150,6 +150,19 @@ fun AppNavGraph(
                                 bitrate = station.bitrate,
                                 logo = station.logo,
                                 sourceId = sourceId ?: 0L
+                            )
+                        )
+                    },
+                    onNavigateToPodcastPlayer = { episode, feedTitle, feedImageUrl ->
+                        navController.navigate(
+                            Destinations.radioPlayer(
+                                url = episode.audioUrl,
+                                title = episode.title,
+                                group = feedTitle,
+                                codec = episode.audioType.ifBlank { "Podcast" },
+                                bitrate = 0,
+                                logo = episode.imageUrl.ifBlank { feedImageUrl },
+                                sourceId = 0L
                             )
                         )
                     }
@@ -183,30 +196,11 @@ fun AppNavGraph(
                 )
             }
 
-            composable(Destinations.PODCAST) {
-                PodcastScreen(
-                    onNavigateBack = { navController.popBackStack() },
-                    onNavigateToPlayer = { episode, feedTitle, feedImageUrl ->
-                        navController.navigate(
-                            Destinations.radioPlayer(
-                                url = episode.audioUrl,
-                                title = episode.title,
-                                group = feedTitle,
-                                codec = episode.audioType.ifBlank { "Podcast" },
-                                bitrate = 0,
-                                logo = episode.imageUrl.ifBlank { feedImageUrl },
-                                sourceId = 0L
-                            )
-                        )
-                    }
-                )
-            }
-
             composable(Destinations.SETTINGS) {
                 SettingsScreen(
                     onNavigateToHistory = { navController.navigate(Destinations.HISTORY) },
                     onNavigateToOnline = { navController.navigate(Destinations.ONLINE) },
-                    onNavigateToPodcast = { navController.navigate(Destinations.PODCAST) },
+                    onNavigateToPodcastSourceManagement = { navController.navigate(Destinations.PODCAST_SOURCE_MANAGEMENT) },
                     onNavigateToSiteManagement = { navController.navigate(Destinations.SITE_MANAGEMENT) },
                     onNavigateToLiveSourceManagement = { navController.navigate(Destinations.LIVE_SOURCE_MANAGEMENT) },
                     onNavigateToRadioSourceManagement = { navController.navigate(Destinations.RADIO_SOURCE_MANAGEMENT) }
@@ -419,6 +413,12 @@ fun AppNavGraph(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+
+            composable(Destinations.PODCAST_SOURCE_MANAGEMENT) {
+                PodcastSourceManagementScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
 
         BackHandler(enabled = currentRoute !in playerRoutes) {
@@ -470,18 +470,18 @@ private fun FloatingCinemaNavigationBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(AppColors.Shell.copy(alpha = 0.96f))
-            .border(1.dp, AppColors.Divider)
+            .border(width = 1.dp, color = AppColors.Divider)
             .navigationBarsPadding()
-            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)
+            .padding(start = 12.dp, end = 12.dp, top = 7.dp, bottom = 8.dp)
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(62.dp),
+                .height(58.dp),
             color = AppColors.Surface,
             contentColor = AppColors.TextSecondary,
-            shape = RoundedCornerShape(18.dp),
-            shadowElevation = 4.dp,
+            shape = RoundedCornerShape(12.dp),
+            shadowElevation = 2.dp,
             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Divider)
         ) {
             Row(
@@ -499,7 +499,7 @@ private fun FloatingCinemaNavigationBar(
                             .fillMaxHeight(),
                         color = if (selected) AppColors.PrimaryLight else Color.Transparent,
                         contentColor = if (selected) AppColors.Primary else AppColors.TextTertiary,
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(8.dp)
                     ) {
                         Column(
                             modifier = Modifier.fillMaxSize(),
@@ -509,9 +509,9 @@ private fun FloatingCinemaNavigationBar(
                             Icon(
                                 imageVector = item.icon,
                                 contentDescription = item.label,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(19.dp)
                             )
-                            Spacer(modifier = Modifier.height(3.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = item.label,
                                 fontSize = 11.sp,

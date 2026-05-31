@@ -486,59 +486,70 @@ class PlayerViewModel @Inject constructor(
 
     private suspend fun loadFallbackCandidates(updateUi: Boolean): List<PlaybackCandidate> {
         val targetEpisodeLabel = currentEpisodeLabel
-        if (title.isBlank() || targetEpisodeLabel.isBlank()) return emptyList()
+        val targetTitle = title
+        if (targetTitle.isBlank() || targetEpisodeLabel.isBlank()) return emptyList()
 
         if (updateUi) {
             _playbackUiState.value = PlaybackUiState(
                 sourceName = currentSourceName(),
-                message = "正在查找《$title》的备用线路",
+                message = "正在查找《$targetTitle》的备用线路",
                 isRecovering = true
             )
         }
 
-        val candidates = mutableListOf<PlaybackCandidate>()
-        val enabledSites = siteRepository.getEnabledSites()
-        enabledSites.forEach { site ->
-            val detailItems = if (site.id == siteId && vodId.isNotBlank()) {
-                vodRepository.getVodDetail(
-                    site.apiUrl,
-                    vodId,
-                    timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
-                ).getOrNull()
-                    ?.list
-                    .orEmpty()
-            } else {
-                val searchResults = vodRepository.getVodList(
-                    baseUrl = site.apiUrl,
-                    page = 1,
-                    keyword = title,
-                    timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
-                ).getOrNull()?.list.orEmpty()
-                val matched = searchResults.firstOrNull {
-                    normalizeTitle(it.vod_name) == normalizeTitle(title)
-                } ?: searchResults.firstOrNull {
-                    normalizeTitle(it.vod_name).contains(normalizeTitle(title)) ||
-                        normalizeTitle(title).contains(normalizeTitle(it.vod_name))
-                } ?: searchResults.firstOrNull()
-                matched?.let { item ->
+        val candidates = withContext(Dispatchers.IO) {
+            val collected = mutableListOf<PlaybackCandidate>()
+            val enabledSites = siteRepository.getEnabledSites()
+            val normalizedTargetTitle = normalizeTitle(targetTitle)
+            enabledSites.forEach { site ->
+                val detailItems = if (site.id == siteId && vodId.isNotBlank()) {
                     vodRepository.getVodDetail(
                         site.apiUrl,
-                        item.vod_id.toString(),
+                        vodId,
+                        timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
+                    ).getOrNull()
+                        ?.list
+                        .orEmpty()
+                } else {
+                    val searchResults = vodRepository.getVodList(
+                        baseUrl = site.apiUrl,
+                        page = 1,
+                        keyword = targetTitle,
                         timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
                     ).getOrNull()?.list.orEmpty()
-                }.orEmpty()
-            }
+                    val matched = withContext(Dispatchers.Default) {
+                        searchResults.firstOrNull {
+                            normalizeTitle(it.vod_name) == normalizedTargetTitle
+                        } ?: searchResults.firstOrNull {
+                            val normalizedName = normalizeTitle(it.vod_name)
+                            normalizedName.contains(normalizedTargetTitle) ||
+                                normalizedTargetTitle.contains(normalizedName)
+                        } ?: searchResults.firstOrNull()
+                    }
+                    matched?.let { item ->
+                        vodRepository.getVodDetail(
+                            site.apiUrl,
+                            item.vod_id.toString(),
+                            timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
+                        ).getOrNull()?.list.orEmpty()
+                    }.orEmpty()
+                }
 
-            detailItems.firstOrNull()?.let { vod ->
-                val groups = VodPlayUrlParser.parseGroups(vod.vod_play_from, vod.vod_play_url)
-                candidates += buildCandidatesForEpisode(
-                    siteId = site.id,
-                    vodId = vod.vod_id.toString(),
-                    sourceName = site.name,
-                    groups = groups,
-                    label = targetEpisodeLabel
-                )
+                detailItems.firstOrNull()?.let { vod ->
+                    val sourceCandidates = withContext(Dispatchers.Default) {
+                        val groups = VodPlayUrlParser.parseGroups(vod.vod_play_from, vod.vod_play_url)
+                        buildCandidatesForEpisode(
+                            siteId = site.id,
+                            vodId = vod.vod_id.toString(),
+                            sourceName = site.name,
+                            groups = groups,
+                            label = targetEpisodeLabel
+                        )
+                    }
+                    collected += sourceCandidates
+                }
             }
+            collected
         }
 
         Log.d(TAG, "loadFallbackCandidates - loaded ${candidates.size} candidates")
@@ -682,15 +693,20 @@ class PlayerViewModel @Inject constructor(
             timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs
         ).getOrNull()?.list?.firstOrNull() ?: return
 
-        val groups = VodPlayUrlParser.parseGroups(vod.vod_play_from, vod.vod_play_url)
-        val selectedGroup = selectEpisodeNavigationGroup(groups, candidate) ?: return
-        val items = selectedGroup.episodes.map { episode ->
-            EpisodeNavigationItem(
-                label = episode.label,
-                url = episode.url,
-                groupName = selectedGroup.name
-            )
-        }
+        val navigationResult = withContext(Dispatchers.Default) {
+            val groups = VodPlayUrlParser.parseGroups(vod.vod_play_from, vod.vod_play_url)
+            val selectedGroup = selectEpisodeNavigationGroup(groups, candidate) ?: return@withContext null
+            val items = selectedGroup.episodes.map { episode ->
+                EpisodeNavigationItem(
+                    label = episode.label,
+                    url = episode.url,
+                    groupName = selectedGroup.name
+                )
+            }
+            selectedGroup.name to items
+        } ?: return
+        val selectedGroupName = navigationResult.first
+        val items = navigationResult.second
         if (items.isEmpty()) return
 
         val activeCandidate = playbackCandidates.getOrNull(currentCandidateIndex) ?: return
@@ -700,7 +716,7 @@ class PlayerViewModel @Inject constructor(
 
         episodeNavigationSiteId = candidate.siteId
         episodeNavigationVodId = candidate.vodId
-        episodeNavigationGroupName = selectedGroup.name
+        episodeNavigationGroupName = selectedGroupName
         episodeNavigationItems = items
         episodeNavigationIndex = findEpisodeIndex(items, candidate)
         publishEpisodeNavigation()
@@ -1289,28 +1305,30 @@ class LivePlayerViewModel @Inject constructor(
                 return
             }
 
-            val targetName = normalizeLiveChannelName(channelTitle)
-            val orderedSources = enabledSources.sortedBy { source ->
-                if (source.id == sourceId) 0 else 1
+            val candidates = withContext(Dispatchers.IO) {
+                val targetName = normalizeLiveChannelName(channelTitle)
+                val orderedSources = enabledSources.sortedBy { source ->
+                    if (source.id == sourceId) 0 else 1
+                }
+                orderedSources.flatMap { source ->
+                    liveRepository.fetchAndParseChannels(
+                        source.url,
+                        timeoutMs = networkSettingsRepository.currentSettings().liveSourceTimeoutMs
+                    )
+                        .getOrNull()
+                        .orEmpty()
+                        .filter { normalizeLiveChannelName(it.name) == targetName }
+                        .map { channel ->
+                            LivePlaybackCandidate(
+                                url = channel.url,
+                                sourceName = source.name,
+                                channelName = channel.name,
+                                group = channel.group,
+                                format = channel.format
+                            )
+                        }
+                }.distinctBy { it.url }
             }
-            val candidates = orderedSources.flatMap { source ->
-                liveRepository.fetchAndParseChannels(
-                    source.url,
-                    timeoutMs = networkSettingsRepository.currentSettings().liveSourceTimeoutMs
-                )
-                    .getOrNull()
-                    .orEmpty()
-                    .filter { normalizeLiveChannelName(it.name) == targetName }
-                    .map { channel ->
-                        LivePlaybackCandidate(
-                            url = channel.url,
-                            sourceName = source.name,
-                            channelName = channel.name,
-                            group = channel.group,
-                            format = channel.format
-                        )
-                    }
-            }.distinctBy { it.url }
 
             mergeLivePlaybackCandidates(candidates)
             sameNameLinesLoaded = true

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class DetailSourceOption(
@@ -50,6 +51,7 @@ class DetailViewModel @Inject constructor(
     companion object {
         private const val TAG = "DetailViewModel"
         private const val SOURCE_AGGREGATION_PARALLELISM = 4
+        private const val SOURCE_OPTIONS_BATCH_SIZE = 3
     }
 
     private val siteId: Long = savedStateHandle.get<Long>("siteId") ?: 0L
@@ -138,6 +140,8 @@ class DetailViewModel @Inject constructor(
         val extraSites = enabledSites.filterNot { it.id == primarySource.siteId }
         val resultChannel = Channel<DetailSourceOption?>(Channel.UNLIMITED)
         val semaphore = Semaphore(SOURCE_AGGREGATION_PARALLELISM)
+        var pendingUiUpdateCount = 0
+        var receivedCount = 0
 
         extraSites.forEach { site ->
             launch(Dispatchers.IO) {
@@ -164,23 +168,37 @@ class DetailViewModel @Inject constructor(
         }
 
         repeat(extraSites.size) {
+            receivedCount++
             val source = resultChannel.receive()
             if (source != null) {
                 options += source
+                pendingUiUpdateCount++
+            }
+
+            if (pendingUiUpdateCount > 0 && shouldPublishSourceOptions(receivedCount, extraSites.size, pendingUiUpdateCount)) {
                 val currentState = _uiState.value as? DetailUiState.Success
                 if (currentState != null) {
-                    val mergedOptions = (currentState.sourceOptions + source).distinctBy { it.key }
+                    val mergedOptions = (currentState.sourceOptions + options).distinctBy { it.key }
                     _uiState.value = currentState.copy(
                         sourceOptions = mergedOptions,
                         isLoadingSources = true
                     )
                 }
+                pendingUiUpdateCount = 0
             }
         }
         resultChannel.close()
 
         Log.d(TAG, "loadSourceOptions - loaded ${options.size} source options")
         options.distinctBy { it.key }
+    }
+
+    private fun shouldPublishSourceOptions(
+        receivedCount: Int,
+        totalCount: Int,
+        pendingCount: Int
+    ): Boolean {
+        return pendingCount >= SOURCE_OPTIONS_BATCH_SIZE || receivedCount >= totalCount
     }
 
     private suspend fun loadSourceDetail(
@@ -195,10 +213,12 @@ class DetailViewModel @Inject constructor(
                 Log.d(TAG, "loadSourceDetail - vod_play_from: ${vodDetail.vod_play_from}")
                 Log.d(TAG, "loadSourceDetail - vod_play_url: ${vodDetail.vod_play_url}")
 
-                val episodeGroups = VodPlayUrlParser.parseGroups(
-                    vodDetail.vod_play_from,
-                    vodDetail.vod_play_url
-                )
+                val episodeGroups = withContext(Dispatchers.Default) {
+                    VodPlayUrlParser.parseGroups(
+                        vodDetail.vod_play_from,
+                        vodDetail.vod_play_url
+                    )
+                }
                 if (episodeGroups.isEmpty()) {
                     Log.d(TAG, "loadSourceDetail - source=${site.name}, no m3u8 episodes, skipped")
                     return@let null

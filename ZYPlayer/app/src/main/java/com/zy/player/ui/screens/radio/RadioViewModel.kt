@@ -106,10 +106,12 @@ class RadioViewModel @Inject constructor(
             radioRepository.fetchAndParseStations(url, forceRefresh = forceRefresh).fold(
                 onSuccess = { stations ->
                     allStations = stations
-                    _groups.value = stations
-                        .map { it.group.ifBlank { "默认" } }
-                        .distinct()
-                        .sorted()
+                    _groups.value = withContext(Dispatchers.Default) {
+                        stations
+                            .map { it.group.ifBlank { "默认" } }
+                            .distinct()
+                            .sorted()
+                    }
                     scheduleApplyFilters()
                 },
                 onFailure = { error ->

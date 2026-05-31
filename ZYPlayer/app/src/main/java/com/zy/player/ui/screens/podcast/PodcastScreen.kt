@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zy.player.data.local.entity.PodcastSubscriptionEntity
@@ -75,6 +76,10 @@ import java.util.Locale
 fun PodcastScreen(
     onNavigateBack: () -> Unit,
     onNavigateToPlayer: (PodcastEpisode, String, String) -> Unit,
+    useOuterBackground: Boolean = true,
+    showBackButton: Boolean = true,
+    showHeader: Boolean = true,
+    contentBottomPadding: Dp = 96.dp,
     viewModel: PodcastViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -86,14 +91,15 @@ fun PodcastScreen(
         viewModel.closeSubscription()
     }
 
-    CinemaBackground(modifier = Modifier.fillMaxSize()) {
+    val content: @Composable () -> Unit = {
         if (uiState.selectedSubscriptionId != null) {
             PodcastSubscriptionDetailPage(
                 uiState = uiState,
                 onBackClick = viewModel::closeSubscription,
                 onEpisodeClick = { episode, feed ->
                     onNavigateToPlayer(episode, feed.title, feed.imageUrl)
-                }
+                },
+                contentBottomPadding = contentBottomPadding
             )
         } else {
             PodcastLibraryPage(
@@ -101,7 +107,9 @@ fun PodcastScreen(
                 onInputChange = { inputUrl = it },
                 uiState = uiState,
                 subscriptions = subscriptions,
-                onBackClick = onNavigateBack,
+                showHeader = showHeader,
+                contentBottomPadding = contentBottomPadding,
+                onBackClick = if (showBackButton) onNavigateBack else null,
                 onAddClick = {
                     viewModel.addSubscription(inputUrl)
                     inputUrl = ""
@@ -118,6 +126,14 @@ fun PodcastScreen(
                 }
             )
         }
+    }
+
+    if (useOuterBackground) {
+        CinemaBackground(modifier = Modifier.fillMaxSize()) {
+            content()
+        }
+    } else {
+        content()
     }
 
     uiState.message?.let { message ->
@@ -169,7 +185,9 @@ private fun PodcastLibraryPage(
     onInputChange: (String) -> Unit,
     uiState: PodcastUiState,
     subscriptions: List<PodcastSubscriptionEntity>,
-    onBackClick: () -> Unit,
+    showHeader: Boolean,
+    contentBottomPadding: Dp,
+    onBackClick: (() -> Unit)?,
     onAddClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onSubscriptionClick: (PodcastSubscriptionEntity) -> Unit,
@@ -180,23 +198,25 @@ private fun PodcastLibraryPage(
     val canAdd = inputUrl.trim().startsWith("http://") || inputUrl.trim().startsWith("https://")
 
     Column(modifier = Modifier.fillMaxSize()) {
-        PageHeader(
-            title = "播客",
-            onBackClick = onBackClick,
-            actions = {
-                HeaderActionButton(
-                    icon = Icons.Default.Refresh,
-                    contentDescription = "刷新聚合节目",
-                    enabled = !uiState.isRefreshingLibrary,
-                    onClick = onRefreshClick
-                )
-            }
-        )
+        if (showHeader) {
+            PageHeader(
+                title = "播客",
+                onBackClick = onBackClick,
+                actions = {
+                    HeaderActionButton(
+                        icon = Icons.Default.Refresh,
+                        contentDescription = "刷新聚合节目",
+                        enabled = !uiState.isRefreshingLibrary,
+                        onClick = onRefreshClick
+                    )
+                }
+            )
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(start = 14.dp, top = 8.dp, end = 14.dp, bottom = contentBottomPadding),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
                 PodcastIntroCard(subscriptionCount = subscriptions.size)
@@ -276,7 +296,8 @@ private fun PodcastLibraryPage(
 private fun PodcastSubscriptionDetailPage(
     uiState: PodcastUiState,
     onBackClick: () -> Unit,
-    onEpisodeClick: (PodcastEpisode, PodcastFeed) -> Unit
+    onEpisodeClick: (PodcastEpisode, PodcastFeed) -> Unit,
+    contentBottomPadding: Dp
 ) {
     val feed = uiState.selectedFeed
     Column(modifier = Modifier.fillMaxSize()) {
@@ -287,7 +308,7 @@ private fun PodcastSubscriptionDetailPage(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 96.dp),
+            contentPadding = PaddingValues(start = 16.dp, top = 0.dp, end = 16.dp, bottom = contentBottomPadding),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (uiState.isLoadingFeed || feed == null) {
@@ -317,7 +338,7 @@ private fun PodcastIntroCard(subscriptionCount: Int) {
             .clip(RoundedCornerShape(4.dp))
             .background(AppColors.Surface)
             .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
-            .padding(14.dp),
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -331,30 +352,30 @@ private fun PodcastIntroCard(subscriptionCount: Int) {
                 imageVector = Icons.Default.Podcasts,
                 contentDescription = null,
                 tint = AppColors.Primary,
-                modifier = Modifier.size(25.dp)
+                modifier = Modifier.size(23.dp)
             )
         }
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(10.dp))
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                text = "音频聚合首页",
+                text = "播客订阅",
                 color = AppColors.TextPrimary,
-                fontSize = 20.sp,
-                lineHeight = 24.sp,
+                fontSize = 18.sp,
+                lineHeight = 22.sp,
                 fontWeight = FontWeight.Black
             )
             Text(
                 text = if (subscriptionCount > 0) {
-                    "已订阅 $subscriptionCount 个播客，最新节目会在下方聚合展示。"
+                    "已订阅 $subscriptionCount 个播客，最新节目会在下方展示。"
                 } else {
-                    "添加 RSS 订阅后，这里会聚合展示所有播客的最新节目。"
+                    "添加 RSS 订阅后，这里会展示所有播客的最新节目。"
                 },
                 color = AppColors.TextSecondary,
-                fontSize = 13.sp,
-                lineHeight = 18.sp
+                fontSize = 12.sp,
+                lineHeight = 16.sp
             )
         }
     }
@@ -374,15 +395,15 @@ private fun PodcastAddCard(
             .clip(RoundedCornerShape(4.dp))
             .background(AppColors.Surface)
             .border(1.dp, AppColors.Divider, RoundedCornerShape(4.dp))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OutlinedTextField(
             value = inputUrl,
             onValueChange = onInputChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 92.dp, max = 140.dp),
+                .heightIn(min = 76.dp, max = 116.dp),
             label = { Text("RSS 订阅地址") },
             placeholder = {
                 Text(
@@ -397,8 +418,8 @@ private fun PodcastAddCard(
                 lineHeight = 18.sp
             ),
             singleLine = false,
-            minLines = 3,
-            maxLines = 5,
+            minLines = 2,
+            maxLines = 4,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             shape = RoundedCornerShape(4.dp),
             colors = OutlinedTextFieldDefaults.colors(
@@ -421,7 +442,7 @@ private fun PodcastAddCard(
             enabled = canAdd && !isAdding,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(46.dp),
+                .height(44.dp),
             color = if (canAdd && !isAdding) AppColors.Primary else AppColors.SurfaceRaised,
             contentColor = if (canAdd && !isAdding) AppColors.OnPrimary else AppColors.TextTertiary,
             shape = RoundedCornerShape(4.dp),

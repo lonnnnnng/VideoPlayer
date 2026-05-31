@@ -1,4 +1,4 @@
-package com.zy.player.ui.screens.radiosource
+package com.zy.player.ui.screens.podcast
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -9,18 +9,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -34,40 +34,43 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.zy.player.data.local.entity.RadioSourceEntity
+import com.zy.player.data.local.entity.PodcastSubscriptionEntity
 import com.zy.player.ui.components.CinemaBackground
 import com.zy.player.ui.components.CinemaMessage
 import com.zy.player.ui.components.PageHeader
-import com.zy.player.ui.components.SourceCheckResultDialog
-import com.zy.player.ui.components.SourceEditorDialog
-import com.zy.player.ui.components.SourceCheckStatusMeta
-import com.zy.player.ui.components.SourceCompactEnabledSwitch
 import com.zy.player.ui.components.SourceManagementIconButton
+import com.zy.player.ui.components.SourceManagementMeta
 import com.zy.player.ui.components.SourcePrimaryActionButton
+import com.zy.player.ui.components.SourceUrlEditorDialog
 import com.zy.player.ui.theme.AppColors
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
-fun RadioSourceManagementScreen(
+fun PodcastSourceManagementScreen(
     onNavigateBack: () -> Unit,
-    viewModel: RadioSourceManagementViewModel = hiltViewModel()
+    viewModel: PodcastViewModel = hiltViewModel()
 ) {
-    val sources by viewModel.sources.collectAsState()
-    val checkingSourceId by viewModel.checkingSourceId.collectAsState()
-    val checkResultDialog by viewModel.checkResultDialog.collectAsState()
+    val sources by viewModel.subscriptions.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
-    var editingSource by remember { mutableStateOf<RadioSourceEntity?>(null) }
-    var deletingSource by remember { mutableStateOf<RadioSourceEntity?>(null) }
-    val isBusy = checkingSourceId != null
+    var editingSource by remember { mutableStateOf<PodcastSubscriptionEntity?>(null) }
+    var deletingSource by remember { mutableStateOf<PodcastSubscriptionEntity?>(null) }
+    val isBusy = uiState.isRefreshingSubscriptions || uiState.isRefreshingSubscriptionId != null || uiState.isAdding
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             PageHeader(
-                title = "电台源管理",
+                title = "播客源管理",
                 onBackClick = onNavigateBack,
                 actions = {
                     IconButton(
@@ -76,9 +79,27 @@ fun RadioSourceManagementScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "添加",
+                            contentDescription = "添加播客源",
                             tint = if (!isBusy) AppColors.TextPrimary else AppColors.TextTertiary
                         )
+                    }
+                    IconButton(
+                        onClick = viewModel::refreshSubscriptions,
+                        enabled = sources.isNotEmpty() && !isBusy
+                    ) {
+                        if (uiState.isRefreshingSubscriptions) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = AppColors.Primary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "刷新播客源",
+                                tint = if (sources.isNotEmpty() && !isBusy) AppColors.TextPrimary else AppColors.TextTertiary
+                            )
+                        }
                     }
                 }
             )
@@ -86,9 +107,9 @@ fun RadioSourceManagementScreen(
             if (sources.isEmpty()) {
                 CinemaMessage(
                     modifier = Modifier.fillMaxSize(),
-                    title = "暂无电台源",
-                    message = "添加 M3U、PLS、JSON 或 Radio Browser 地址后，电台页会解析列表。",
-                    actionText = if (isBusy) null else "添加电台源",
+                    title = "暂无播客源",
+                    message = "添加 RSS 地址后即可在音频页和这里管理播客订阅。",
+                    actionText = if (isBusy) null else "添加播客源",
                     onAction = if (isBusy) null else ({ showAddDialog = true })
                 )
             } else {
@@ -99,20 +120,14 @@ fun RadioSourceManagementScreen(
                     itemsIndexed(
                         items = sources,
                         key = { _, source -> source.id },
-                        contentType = { _, _ -> "radio-source-row" }
-                    ) { index, source ->
-                        RadioSourceItem(
+                        contentType = { _, _ -> "podcast-source-row" }
+                    ) { _, source ->
+                        PodcastSourceItem(
                             source = source,
-                            canMoveUp = index > 0,
-                            canMoveDown = index < sources.lastIndex,
-                            onToggleEnabled = { viewModel.toggleEnabled(source) },
                             onEdit = { editingSource = source },
                             onDelete = { deletingSource = source },
-                            onMoveUp = { viewModel.moveSourceUp(source) },
-                            onMoveDown = { viewModel.moveSourceDown(source) },
-                            onCheck = { viewModel.checkSource(source) },
-                            isChecking = checkingSourceId == source.id,
-                            isCheckEnabled = !isBusy || checkingSourceId == source.id,
+                            onRefresh = { viewModel.refreshSubscriptionItem(source) },
+                            isRefreshing = uiState.isRefreshingSubscriptionId == source.id,
                             actionsEnabled = !isBusy
                         )
                     }
@@ -122,62 +137,83 @@ fun RadioSourceManagementScreen(
     }
 
     if (showAddDialog) {
-        SourceEditorDialog(
-            title = "添加电台源",
+        SourceUrlEditorDialog(
+            title = "添加播客源",
+            initialUrl = "",
+            description = "粘贴播客 RSS 或 Atom 订阅地址，添加后会自动解析节目列表。",
+            urlLabel = "订阅地址",
+            urlPlaceholder = "https://example.com/podcast/feed.xml",
             onDismiss = { showAddDialog = false },
-            onConfirm = { name, url ->
-                viewModel.addSource(name, url)
+            onConfirm = { url ->
+                viewModel.addSubscription(url)
                 showAddDialog = false
             }
         )
     }
 
     editingSource?.let { source ->
-        SourceEditorDialog(
-            title = "编辑电台源",
-            initialName = source.name,
+        SourceUrlEditorDialog(
+            title = "编辑播客源",
             initialUrl = source.url,
+            description = "修改订阅地址后会重新读取播客信息，并更新节目数量和封面。",
+            urlLabel = "订阅地址",
+            urlPlaceholder = "https://example.com/podcast/feed.xml",
             onDismiss = { editingSource = null },
-            onConfirm = { name, url ->
-                viewModel.updateSource(source.copy(name = name, url = url))
+            onConfirm = { url ->
+                viewModel.updateSubscription(source.copy(url = url))
                 editingSource = null
             }
         )
     }
 
     deletingSource?.let { source ->
-        ConfirmDialog(
-            title = "删除电台源",
-            message = "确定要删除 ${source.name} 吗？",
-            onDismiss = { deletingSource = null },
-            onConfirm = {
-                viewModel.deleteSource(source)
-                deletingSource = null
+        AlertDialog(
+            onDismissRequest = { deletingSource = null },
+            containerColor = AppColors.Surface,
+            titleContentColor = AppColors.TextPrimary,
+            textContentColor = AppColors.TextSecondary,
+            title = { Text("删除播客源") },
+            text = { Text("确定删除 ${source.title} 吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteSubscription(source)
+                    deletingSource = null
+                }) {
+                    Text("删除", color = AppColors.Error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingSource = null }) {
+                    Text("取消")
+                }
             }
         )
     }
 
-    checkResultDialog?.let { state ->
-        SourceCheckResultDialog(
-            state = state,
-            onDismiss = viewModel::dismissCheckResultDialog
+    uiState.message?.let { message ->
+        AlertDialog(
+            onDismissRequest = viewModel::clearMessage,
+            containerColor = AppColors.Surface,
+            titleContentColor = AppColors.TextPrimary,
+            textContentColor = AppColors.TextSecondary,
+            title = { Text("提示") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = viewModel::clearMessage) {
+                    Text("知道了")
+                }
+            }
         )
     }
 }
 
 @Composable
-private fun RadioSourceItem(
-    source: RadioSourceEntity,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onToggleEnabled: () -> Unit,
+private fun PodcastSourceItem(
+    source: PodcastSubscriptionEntity,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onCheck: () -> Unit,
-    isChecking: Boolean,
-    isCheckEnabled: Boolean,
+    onRefresh: () -> Unit,
+    isRefreshing: Boolean,
     actionsEnabled: Boolean
 ) {
     Surface(
@@ -200,7 +236,7 @@ private fun RadioSourceItem(
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
-                        text = source.name,
+                        text = source.title,
                         color = AppColors.TextPrimary,
                         fontSize = 13.sp,
                         lineHeight = 16.sp,
@@ -218,18 +254,13 @@ private fun RadioSourceItem(
                     )
                 }
                 SourcePrimaryActionButton(
-                    icon = Icons.Default.CheckCircle,
-                    contentDescription = "检测",
-                    enabled = isCheckEnabled || isChecking,
-                    isLoading = isChecking,
-                    onClick = onCheck
+                    icon = Icons.Default.Refresh,
+                    contentDescription = "刷新",
+                    enabled = actionsEnabled || isRefreshing,
+                    isLoading = isRefreshing,
+                    onClick = onRefresh
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                SourceCompactEnabledSwitch(
-                    checked = source.enabled,
-                    onToggle = onToggleEnabled,
-                    enabled = actionsEnabled
-                )
             }
 
             Row(
@@ -237,25 +268,13 @@ private fun RadioSourceItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                SourceCheckStatusMeta(
-                    lastCheckStatus = source.lastCheckStatus,
-                    lastCheckTime = source.lastCheckTime,
+                SourceManagementMeta(
+                    text = podcastMetaText(source),
                     modifier = Modifier.weight(1f),
-                    isChecking = isChecking
+                    isLoading = isRefreshing,
+                    loadingText = "刷新中"
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                    SourceManagementIconButton(
-                        icon = Icons.Default.ArrowUpward,
-                        contentDescription = "上移",
-                        enabled = actionsEnabled && canMoveUp,
-                        onClick = onMoveUp
-                    )
-                    SourceManagementIconButton(
-                        icon = Icons.Default.ArrowDownward,
-                        contentDescription = "下移",
-                        enabled = actionsEnabled && canMoveDown,
-                        onClick = onMoveDown
-                    )
                     SourceManagementIconButton(
                         icon = Icons.Default.Edit,
                         contentDescription = "编辑",
@@ -274,29 +293,22 @@ private fun RadioSourceItem(
     }
 }
 
-@Composable
-private fun ConfirmDialog(
-    title: String,
-    message: String,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = AppColors.Surface,
-        titleContentColor = AppColors.TextPrimary,
-        textContentColor = AppColors.TextSecondary,
-        title = { Text(title) },
-        text = { Text(message) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text("确定")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
+private fun formatRefreshTime(value: Long): String {
+    if (value <= 0) return "未刷新"
+    return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(value))
+}
+
+private fun podcastMetaText(source: PodcastSubscriptionEntity) = buildAnnotatedString {
+    withStyle(
+        SpanStyle(
+            color = AppColors.Success,
+            fontWeight = FontWeight.Bold
+        )
+    ) {
+        append("${source.episodeCount} 期")
+    }
+    append(" · ")
+    withStyle(SpanStyle(color = AppColors.TextTertiary)) {
+        append(formatRefreshTime(source.lastRefreshTime))
+    }
 }

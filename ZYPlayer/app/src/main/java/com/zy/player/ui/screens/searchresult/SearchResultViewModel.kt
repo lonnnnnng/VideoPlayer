@@ -23,6 +23,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 
 data class SearchResultItem(
     val siteId: Long,
@@ -86,6 +89,7 @@ class SearchResultViewModel @Inject constructor(
             val startedAt = System.currentTimeMillis()
             val results = ConcurrentHashMap<String, SearchResultItem>()
             val completedCount = AtomicInteger(0)
+            val semaphore = Semaphore(SEARCH_PARALLELISM)
 
             publishResults(
                 startedAt = startedAt,
@@ -106,39 +110,55 @@ class SearchResultViewModel @Inject constructor(
             coroutineScope {
                 sites.map { site ->
                     async(Dispatchers.IO) {
-                        vodRepository.getVodList(
-                            baseUrl = site.apiUrl,
-                            page = 1,
-                            keyword = keyword,
-                            timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs,
-                            forceRefresh = true
-                        ).fold(
-                            onSuccess = { response ->
-                                response.list.orEmpty()
-                                    .filter { it.vod_name.contains(keyword, ignoreCase = true) }
-                                    .forEach { vod ->
-                                        val key = "${site.id}:${vod.vod_id}"
-                                        results[key] = SearchResultItem(
-                                            siteId = site.id,
-                                            siteName = site.name,
-                                            vod = vod
-                                        )
-                                    }
-                            },
-                            onFailure = { error ->
-                                Log.w(TAG, "search - site=${site.name} failed: ${error.message}")
-                            }
-                        )
+                        semaphore.withPermit {
+                            vodRepository.getVodList(
+                                baseUrl = site.apiUrl,
+                                page = 1,
+                                keyword = keyword,
+                                timeoutMs = networkSettingsRepository.currentSettings().videoSourceTimeoutMs,
+                                forceRefresh = true
+                            ).fold(
+                                onSuccess = { response ->
+                                    response.list.orEmpty()
+                                        .filter { it.vod_name.contains(keyword, ignoreCase = true) }
+                                        .forEach { vod ->
+                                            val key = "${site.id}:${vod.vod_id}"
+                                            results[key] = SearchResultItem(
+                                                siteId = site.id,
+                                                siteName = site.name,
+                                                vod = vod
+                                            )
+                                        }
+                                },
+                                onFailure = { error ->
+                                    Log.w(TAG, "search - site=${site.name} failed: ${error.message}")
+                                }
+                            )
+                        }
 
                         val completed = completedCount.incrementAndGet()
                         val finished = completed >= sites.size
-                        publishResults(
-                            startedAt = startedAt,
-                            totalSources = sites.size,
-                            completedSources = completed,
-                            results = sortSearchResults(results.values, finalized = finished),
-                            isSearching = !finished
-                        )
+                        if (finished) {
+                            publishResults(
+                                startedAt = startedAt,
+                                totalSources = sites.size,
+                                completedSources = completed,
+                                results = withContext(Dispatchers.Default) {
+                                    sortSearchResults(results.values, finalized = true)
+                                },
+                                isSearching = false
+                            )
+                        } else if (shouldPublishProgress(completed, sites.size)) {
+                            publishResults(
+                                startedAt = startedAt,
+                                totalSources = sites.size,
+                                completedSources = completed,
+                                results = withContext(Dispatchers.Default) {
+                                    sortSearchResults(results.values, finalized = false)
+                                },
+                                isSearching = true
+                            )
+                        }
                     }
                 }.awaitAll()
             }
@@ -180,6 +200,10 @@ class SearchResultViewModel @Inject constructor(
         }
     }
 
+    private fun shouldPublishProgress(completedSources: Int, totalSources: Int): Boolean {
+        return totalSources <= 4 || completedSources % SEARCH_PROGRESS_PUBLISH_STEP == 0
+    }
+
     private fun VodItem.updateSortValue(): Long {
         return parseVodUpdateTime(vod_time)
             ?: parseVodUpdateTime(vod_time_add)
@@ -207,6 +231,8 @@ class SearchResultViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "SearchResultViewModel"
+        private const val SEARCH_PARALLELISM = 4
+        private const val SEARCH_PROGRESS_PUBLISH_STEP = 4
         private val UPDATE_TIME_PATTERNS = listOf(
             "yyyy-MM-dd HH:mm:ss",
             "yyyy-MM-dd HH:mm",

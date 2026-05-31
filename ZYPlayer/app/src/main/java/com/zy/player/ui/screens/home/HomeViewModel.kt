@@ -72,6 +72,7 @@ class HomeViewModel @Inject constructor(
     private var homeSiteSignature: String? = null
     private var nextPage = 1
     private var hasMore = true
+    private var hasStartedInitialLoad = false
 
     init {
         viewModelScope.launch {
@@ -85,10 +86,18 @@ class HomeViewModel @Inject constructor(
                     homeSiteSnapshot = homeSite
                     resetPaging()
                     _uiState.value = HomeUiState.Loading
-                    loadVodList(isRefresh = true)
+                    if (hasStartedInitialLoad) {
+                        loadVodList(isRefresh = true)
+                    }
                 }
             }
         }
+    }
+
+    fun startInitialLoad() {
+        if (hasStartedInitialLoad) return
+        hasStartedInitialLoad = true
+        loadVodList(isRefresh = true)
     }
 
     fun loadVodList(isRefresh: Boolean = false) {

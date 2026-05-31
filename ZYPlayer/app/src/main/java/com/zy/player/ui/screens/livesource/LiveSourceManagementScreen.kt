@@ -5,10 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,11 +21,9 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,8 +45,11 @@ import com.zy.player.ui.components.CinemaMessage
 import com.zy.player.ui.components.PageHeader
 import com.zy.player.ui.components.SourceEditorDialog
 import com.zy.player.ui.components.SourceCheckResultDialog
+import com.zy.player.ui.components.SourceCheckStatusMeta
+import com.zy.player.ui.components.SourceCompactEnabledSwitch
+import com.zy.player.ui.components.SourceManagementIconButton
+import com.zy.player.ui.components.SourcePrimaryActionButton
 import com.zy.player.ui.theme.AppColors
-import com.zy.player.ui.theme.Dimens
 
 @Composable
 fun LiveSourceManagementScreen(
@@ -60,6 +62,7 @@ fun LiveSourceManagementScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var editingSource by remember { mutableStateOf<LiveSourceEntity?>(null) }
     var deletingSource by remember { mutableStateOf<LiveSourceEntity?>(null) }
+    val isBusy = checkingSourceId != null
 
     CinemaBackground(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -67,11 +70,14 @@ fun LiveSourceManagementScreen(
                 title = "直播源管理",
                 onBackClick = onNavigateBack,
                 actions = {
-                    IconButton(onClick = { showAddDialog = true }) {
+                    IconButton(
+                        onClick = { showAddDialog = true },
+                        enabled = !isBusy
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Add,
                             contentDescription = "添加",
-                            tint = AppColors.TextPrimary
+                            tint = if (!isBusy) AppColors.TextPrimary else AppColors.TextTertiary
                         )
                     }
                 }
@@ -82,13 +88,13 @@ fun LiveSourceManagementScreen(
                     modifier = Modifier.fillMaxSize(),
                     title = "暂无直播源",
                     message = "添加 M3U 地址后，直播页会解析频道列表。",
-                    actionText = "添加直播源",
-                    onAction = { showAddDialog = true }
+                    actionText = if (isBusy) null else "添加直播源",
+                    onAction = if (isBusy) null else ({ showAddDialog = true })
                 )
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(Dimens.paddingMedium),
-                    verticalArrangement = Arrangement.spacedBy(Dimens.paddingSmall)
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     itemsIndexed(
                         items = sources,
@@ -106,7 +112,8 @@ fun LiveSourceManagementScreen(
                             onMoveDown = { viewModel.moveSourceDown(source) },
                             onCheck = { viewModel.checkSource(source) },
                             isChecking = checkingSourceId == source.id,
-                            isCheckEnabled = checkingSourceId == null
+                            isCheckEnabled = !isBusy || checkingSourceId == source.id,
+                            actionsEnabled = !isBusy
                         )
                     }
                 }
@@ -170,7 +177,8 @@ private fun LiveSourceItem(
     onMoveDown: () -> Unit,
     onCheck: () -> Unit,
     isChecking: Boolean,
-    isCheckEnabled: Boolean
+    isCheckEnabled: Boolean,
+    actionsEnabled: Boolean
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -179,8 +187,8 @@ private fun LiveSourceItem(
         border = BorderStroke(1.dp, AppColors.Divider)
     ) {
         Column(
-            modifier = Modifier.padding(Dimens.paddingMedium),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -189,12 +197,13 @@ private fun LiveSourceItem(
             ) {
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
                         text = source.name,
                         color = AppColors.TextPrimary,
-                        fontSize = 16.sp,
+                        fontSize = 13.sp,
+                        lineHeight = 16.sp,
                         fontWeight = FontWeight.Black,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -202,87 +211,65 @@ private fun LiveSourceItem(
                     Text(
                         text = source.url,
                         color = AppColors.TextSecondary,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                        maxLines = 2,
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = "状态 ${source.lastCheckStatus}",
-                        color = AppColors.TextTertiary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
                 }
-                Switch(
-                    checked = source.enabled,
-                    onCheckedChange = { onToggleEnabled() }
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ManagementIconButton(
+                SourcePrimaryActionButton(
                     icon = Icons.Default.CheckCircle,
                     contentDescription = "检测",
                     enabled = isCheckEnabled || isChecking,
                     isLoading = isChecking,
                     onClick = onCheck
                 )
-                ManagementIconButton(
-                    icon = Icons.Default.ArrowUpward,
-                    contentDescription = "上移",
-                    enabled = canMoveUp,
-                    onClick = onMoveUp
-                )
-                ManagementIconButton(
-                    icon = Icons.Default.ArrowDownward,
-                    contentDescription = "下移",
-                    enabled = canMoveDown,
-                    onClick = onMoveDown
-                )
-                ManagementIconButton(
-                    icon = Icons.Default.Edit,
-                    contentDescription = "编辑",
-                    onClick = onEdit
-                )
-                ManagementIconButton(
-                    icon = Icons.Default.Delete,
-                    contentDescription = "删除",
-                    onClick = onDelete
+                Spacer(modifier = Modifier.width(6.dp))
+                SourceCompactEnabledSwitch(
+                    checked = source.enabled,
+                    onToggle = onToggleEnabled,
+                    enabled = actionsEnabled
                 )
             }
-        }
-    }
-}
 
-@Composable
-private fun ManagementIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    enabled: Boolean = true,
-    isLoading: Boolean = false,
-    onClick: () -> Unit
-) {
-    IconButton(
-        onClick = onClick,
-        enabled = enabled && !isLoading,
-        modifier = Modifier.size(40.dp)
-    ) {
-        if (isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                color = AppColors.Primary,
-                strokeWidth = 2.dp
-            )
-        } else {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = if (enabled) AppColors.TextPrimary else AppColors.TextTertiary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SourceCheckStatusMeta(
+                    lastCheckStatus = source.lastCheckStatus,
+                    lastCheckTime = source.lastCheckTime,
+                    modifier = Modifier.weight(1f),
+                    isChecking = isChecking
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                    SourceManagementIconButton(
+                        icon = Icons.Default.ArrowUpward,
+                        contentDescription = "上移",
+                        enabled = actionsEnabled && canMoveUp,
+                        onClick = onMoveUp
+                    )
+                    SourceManagementIconButton(
+                        icon = Icons.Default.ArrowDownward,
+                        contentDescription = "下移",
+                        enabled = actionsEnabled && canMoveDown,
+                        onClick = onMoveDown
+                    )
+                    SourceManagementIconButton(
+                        icon = Icons.Default.Edit,
+                        contentDescription = "编辑",
+                        enabled = actionsEnabled,
+                        onClick = onEdit
+                    )
+                    SourceManagementIconButton(
+                        icon = Icons.Default.Delete,
+                        contentDescription = "删除",
+                        enabled = actionsEnabled,
+                        onClick = onDelete
+                    )
+                }
+            }
         }
     }
 }

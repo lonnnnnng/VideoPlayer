@@ -29,8 +29,8 @@ class AutoSourceCheckScheduler @Inject constructor(
                     return@collectLatest
                 }
                 while (true) {
-                    checkVideoSources(settings.videoSourceTimeoutMs)
                     delay(interval * 60_000L)
+                    checkVideoSources(settings.videoSourceTimeoutMs)
                 }
             }
         }

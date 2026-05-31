@@ -1,6 +1,8 @@
 package com.zy.player.player
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
@@ -25,6 +27,7 @@ class PlayerManager @Inject constructor(
     private var currentListener: Player.Listener? = null
     private var currentAnalyticsListener: AnalyticsListener? = null
     private val transferByteListeners = CopyOnWriteArraySet<(Int) -> Unit>()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val transferListener = object : TransferListener {
         override fun onTransferInitializing(
@@ -108,17 +111,25 @@ class PlayerManager @Inject constructor(
 
     fun stopAndRelease() {
         android.util.Log.d("PlayerManager", "stopAndRelease")
-        exoPlayer?.run {
-            playWhenReady = false
-            stop()
-            clearMediaItems()
-            clearVideoSurface()
-            release()
-        }
+        val player = exoPlayer ?: return
         exoPlayer = null
+
+        currentListener?.let { player.removeListener(it) }
+        currentAnalyticsListener?.let { player.removeAnalyticsListener(it) }
         currentListener = null
         currentAnalyticsListener = null
         transferByteListeners.clear()
+
+        player.playWhenReady = false
+        player.stop()
+        player.clearMediaItems()
+        player.clearVideoSurface()
+
+        mainHandler.postDelayed({
+            runCatching {
+                player.release()
+            }
+        }, RELEASE_DELAY_MS)
     }
 
     fun pause() {
@@ -192,5 +203,9 @@ class PlayerManager @Inject constructor(
         currentListener = null
         currentAnalyticsListener = null
         transferByteListeners.clear()
+    }
+
+    private companion object {
+        const val RELEASE_DELAY_MS = 250L
     }
 }

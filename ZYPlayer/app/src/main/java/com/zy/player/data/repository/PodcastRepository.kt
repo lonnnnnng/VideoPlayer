@@ -15,6 +15,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -26,6 +28,10 @@ class PodcastRepository @Inject constructor(
     private val podcastSubscriptionDao: PodcastSubscriptionDao,
     private val okHttpClient: OkHttpClient
 ) {
+    private companion object {
+        const val PODCAST_LIBRARY_PARALLELISM = 4
+    }
+
     fun observeSubscriptions(): Flow<List<PodcastSubscriptionEntity>> = podcastSubscriptionDao.observeAll()
 
     suspend fun addSubscription(url: String): Result<PodcastSubscriptionEntity> = withContext(Dispatchers.IO) {
@@ -56,6 +62,24 @@ class PodcastRepository @Inject constructor(
         podcastSubscriptionDao.delete(subscription)
     }
 
+    suspend fun updateSubscription(subscription: PodcastSubscriptionEntity): Result<PodcastSubscriptionEntity> = withContext(Dispatchers.IO) {
+        fetchPodcastFeed(subscription.url).fold(
+            onSuccess = { feed ->
+                val refreshed = subscription.copy(
+                    title = feed.title,
+                    description = feed.description,
+                    imageUrl = feed.imageUrl,
+                    link = feed.link,
+                    episodeCount = feed.episodes.size,
+                    lastRefreshTime = System.currentTimeMillis()
+                )
+                podcastSubscriptionDao.update(refreshed)
+                Result.success(refreshed)
+            },
+            onFailure = { error -> Result.failure(error) }
+        )
+    }
+
     suspend fun refreshSubscription(subscription: PodcastSubscriptionEntity): Result<PodcastSubscriptionEntity> = withContext(Dispatchers.IO) {
         fetchPodcastFeed(subscription.url).fold(
             onSuccess = { feed ->
@@ -77,21 +101,24 @@ class PodcastRepository @Inject constructor(
     suspend fun fetchLibraryEpisodes(limitPerFeed: Int = 8): Result<List<PodcastLibraryEpisode>> = withContext(Dispatchers.IO) {
         try {
             val subscriptions = podcastSubscriptionDao.getAll()
+            val semaphore = Semaphore(PODCAST_LIBRARY_PARALLELISM)
             val episodes = coroutineScope {
                 subscriptions.map { subscription ->
                     async {
-                        fetchPodcastFeed(subscription.url).getOrNull()
-                            ?.episodes
-                            ?.take(limitPerFeed)
-                            ?.map { episode ->
-                                PodcastLibraryEpisode(
-                                    subscriptionId = subscription.id,
-                                    feedTitle = subscription.title,
-                                    feedImageUrl = subscription.imageUrl,
-                                    episode = episode
-                                )
-                            }
-                            .orEmpty()
+                        semaphore.withPermit {
+                            fetchPodcastFeed(subscription.url).getOrNull()
+                                ?.episodes
+                                ?.take(limitPerFeed)
+                                ?.map { episode ->
+                                    PodcastLibraryEpisode(
+                                        subscriptionId = subscription.id,
+                                        feedTitle = subscription.title,
+                                        feedImageUrl = subscription.imageUrl,
+                                        episode = episode
+                                    )
+                                }
+                                .orEmpty()
+                        }
                     }
                 }.awaitAll().flatten()
             }

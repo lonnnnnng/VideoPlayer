@@ -54,6 +54,7 @@ import com.zy.player.ui.theme.AppColors
 @Composable
 fun RadioScreen(
     onNavigateToPlayer: (RadioStation, Long?) -> Unit,
+    useOuterBackground: Boolean = true,
     viewModel: RadioViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -66,73 +67,40 @@ fun RadioScreen(
     var showSourceSelector by remember { mutableStateOf(false) }
     val currentSourceName = sources.firstOrNull { it.id == currentSourceId }?.name ?: "选择电台源"
 
-    CinemaBackground(modifier = Modifier.fillMaxSize()) {
-        when (val state = uiState) {
-            is RadioUiState.Loading -> CinemaLoading(
-                modifier = Modifier.fillMaxSize(),
-                message = "正在解析电台源"
+    if (useOuterBackground) {
+        CinemaBackground(modifier = Modifier.fillMaxSize()) {
+            RadioScreenContent(
+                uiState = uiState,
+                groups = groups,
+                selectedGroup = selectedGroup,
+                searchQuery = searchQuery,
+                currentSourceName = currentSourceName,
+                currentSourceId = currentSourceId,
+                onSearchChange = viewModel::setSearchQuery,
+                onRefreshClick = viewModel::refreshCurrentSource,
+                onSourceClick = { showSourceSelector = true },
+                onAllClick = viewModel::showAllStations,
+                onGroupClick = { group -> viewModel.selectGroup(if (group == selectedGroup) null else group) },
+                onRetryClick = viewModel::refreshCurrentSource,
+                onNavigateToPlayer = onNavigateToPlayer
             )
-            else -> {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppColors.Shell)
-                    ) {
-                        RadioSearchRow(
-                            searchQuery = searchQuery,
-                            onSearchChange = viewModel::setSearchQuery,
-                            onRefreshClick = viewModel::refreshCurrentSource
-                        )
-
-                        RadioTabs(
-                            labels = groups.ifEmpty { listOf("音乐", "新闻", "中文", "交通", "综合") },
-                            selected = selectedGroup,
-                            currentSourceName = currentSourceName,
-                            onSourceClick = { showSourceSelector = true },
-                            onAllClick = viewModel::showAllStations,
-                            onClick = { group -> viewModel.selectGroup(if (group == selectedGroup) null else group) }
-                        )
-                    }
-
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(top = 8.dp, bottom = 18.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        when (state) {
-                            is RadioUiState.Error -> item {
-                                CinemaMessage(
-                                    title = "电台源连接失败",
-                                    message = state.message,
-                                    actionText = "重试",
-                                    onAction = viewModel::refreshCurrentSource
-                                )
-                            }
-                            is RadioUiState.Empty -> item {
-                                CinemaMessage(
-                                    title = "暂无电台",
-                                    message = "当前筛选没有电台，清除搜索或切换电台源再试。"
-                                )
-                            }
-                            is RadioUiState.Success -> {
-                                items(
-                                    items = state.stations,
-                                    key = { station -> "${station.name}|${station.group}|${station.url}" },
-                                    contentType = { "radio-station-row" }
-                                ) { station ->
-                                    RadioStationRow(
-                                        station = station,
-                                        onClick = { onNavigateToPlayer(station, currentSourceId) }
-                                    )
-                                }
-                            }
-                            RadioUiState.Loading -> Unit
-                        }
-                    }
-                }
-            }
         }
+    } else {
+        RadioScreenContent(
+            uiState = uiState,
+            groups = groups,
+            selectedGroup = selectedGroup,
+            searchQuery = searchQuery,
+            currentSourceName = currentSourceName,
+            currentSourceId = currentSourceId,
+            onSearchChange = viewModel::setSearchQuery,
+            onRefreshClick = viewModel::refreshCurrentSource,
+            onSourceClick = { showSourceSelector = true },
+            onAllClick = viewModel::showAllStations,
+            onGroupClick = { group -> viewModel.selectGroup(if (group == selectedGroup) null else group) },
+            onRetryClick = viewModel::refreshCurrentSource,
+            onNavigateToPlayer = onNavigateToPlayer
+        )
     }
 
     if (showSourceSelector) {
@@ -166,6 +134,90 @@ fun RadioScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun RadioScreenContent(
+    uiState: RadioUiState,
+    groups: List<String>,
+    selectedGroup: String?,
+    searchQuery: String,
+    currentSourceName: String,
+    currentSourceId: Long?,
+    onSearchChange: (String) -> Unit,
+    onRefreshClick: () -> Unit,
+    onSourceClick: () -> Unit,
+    onAllClick: () -> Unit,
+    onGroupClick: (String) -> Unit,
+    onRetryClick: () -> Unit,
+    onNavigateToPlayer: (RadioStation, Long?) -> Unit
+) {
+    when (val state = uiState) {
+        is RadioUiState.Loading -> CinemaLoading(
+            modifier = Modifier.fillMaxSize(),
+            message = "正在解析电台源"
+        )
+        else -> {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(AppColors.Shell)
+                ) {
+                    RadioSearchRow(
+                        searchQuery = searchQuery,
+                        onSearchChange = onSearchChange,
+                        onRefreshClick = onRefreshClick
+                    )
+
+                    RadioTabs(
+                        labels = groups.ifEmpty { listOf("音乐", "新闻", "中文", "交通", "综合") },
+                        selected = selectedGroup,
+                        currentSourceName = currentSourceName,
+                        onSourceClick = onSourceClick,
+                        onAllClick = onAllClick,
+                        onClick = onGroupClick
+                    )
+                }
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    when (state) {
+                        is RadioUiState.Error -> item {
+                            CinemaMessage(
+                                title = "电台源连接失败",
+                                message = state.message,
+                                actionText = "重试",
+                                onAction = onRetryClick
+                            )
+                        }
+                        is RadioUiState.Empty -> item {
+                            CinemaMessage(
+                                title = "暂无电台",
+                                message = "当前筛选没有电台，清除搜索或切换电台源再试。"
+                            )
+                        }
+                        is RadioUiState.Success -> {
+                            items(
+                                items = state.stations,
+                                key = { station -> "${station.name}|${station.group}|${station.url}" },
+                                contentType = { "radio-station-row" }
+                            ) { station ->
+                                RadioStationRow(
+                                    station = station,
+                                    onClick = { onNavigateToPlayer(station, currentSourceId) }
+                                )
+                            }
+                        }
+                        RadioUiState.Loading -> Unit
+                    }
+                }
+            }
+        }
     }
 }
 

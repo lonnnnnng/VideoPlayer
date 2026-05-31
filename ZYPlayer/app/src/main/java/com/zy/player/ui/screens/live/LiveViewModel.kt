@@ -73,7 +73,9 @@ class LiveViewModel @Inject constructor(
             liveRepository.fetchAndParseChannels(url).fold(
                 onSuccess = { channels ->
                     allChannels = channels
-                    allGroups = channels.map { it.group }.distinct().sorted()
+                    allGroups = withContext(Dispatchers.Default) {
+                        channels.map { it.group }.distinct().sorted()
+                    }
                     scheduleApplyFilters()
                 },
                 onFailure = { error ->

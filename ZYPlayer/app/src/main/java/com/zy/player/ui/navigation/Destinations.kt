@@ -5,9 +5,9 @@ import android.net.Uri
 object Destinations {
     const val HOME = "home"
     const val LIVE = "live"
-    const val RADIO = "radio"
+    const val AUDIO = "audio"
     const val ONLINE = "online"
-    const val PODCAST = "podcast"
+    const val PODCAST_SOURCE_MANAGEMENT = "podcast_source_management"
     const val SETTINGS = "settings"
     const val SEARCH = "search"
     const val SEARCH_RESULT = "search_result/{keyword}"

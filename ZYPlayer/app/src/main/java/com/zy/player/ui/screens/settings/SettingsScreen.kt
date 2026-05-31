@@ -25,10 +25,10 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Report
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.RssFeed
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -65,7 +65,7 @@ import java.io.File
 fun SettingsScreen(
     onNavigateToHistory: () -> Unit,
     onNavigateToOnline: () -> Unit,
-    onNavigateToPodcast: () -> Unit,
+    onNavigateToPodcastSourceManagement: () -> Unit,
     onNavigateToSiteManagement: () -> Unit,
     onNavigateToLiveSourceManagement: () -> Unit,
     onNavigateToRadioSourceManagement: () -> Unit,
@@ -128,10 +128,10 @@ fun SettingsScreen(
                         onClick = onNavigateToOnline
                     )
                     SettingsItem(
-                        icon = Icons.Default.Podcasts,
-                        title = "播客",
-                        subtitle = "粘贴 RSS 订阅并播放音频节目",
-                        onClick = onNavigateToPodcast
+                        icon = Icons.Default.RssFeed,
+                        title = "播客源管理",
+                        subtitle = "管理 RSS 订阅源、刷新与删除",
+                        onClick = onNavigateToPodcastSourceManagement
                     )
                     SettingsItem(
                         icon = Icons.Default.VideoLibrary,
